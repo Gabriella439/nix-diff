@@ -116,20 +116,19 @@ diff indent leftPath leftOutputs rightPath rightOutputs = do
                     if leftPaths == rightPaths
                     then do
                         return ()
-                    else if not (Data.Map.size leftExtraPaths == 1 && Data.Map.size rightExtraPaths == 1)
-                    then do
-                        echo (explain ("The set of inputs named `" <> inputName <> "` do not match"))
-                        diffWith leftExtraPaths rightExtraPaths $ \(sign, inputMap) -> do
-                            forM_ (Data.Map.toList inputMap) $ \(path, outputs) -> do
-                                echo ("    " <> sign (pathToText path <> renderOutputs outputs))
-                    else do
-                        -- Check for differences in outputs
-                        let [(leftPath' , leftOutputs' )] =
-                                Data.Map.toList leftExtraPaths
-                        let [(rightPath', rightOutputs')] =
-                                Data.Map.toList rightExtraPaths
-                        echo (explain ("The input named `" <> inputName <> "` differs"))
-                        diff (indent + 2) leftPath' leftOutputs' rightPath' rightOutputs'
+                    else case (Data.Map.toList leftExtraPaths, Data.Map.toList rightExtraPaths) of
+                        ([(leftPath', leftOutputs')], [(rightPath', rightOutputs')]) | leftOutputs' == rightOutputs' -> do
+                            let [(leftPath' , leftOutputs' )] =
+                                    Data.Map.toList leftExtraPaths
+                            let [(rightPath', rightOutputs')] =
+                                    Data.Map.toList rightExtraPaths
+                            echo (explain ("The input named `" <> inputName <> "` differs"))
+                            diff (indent + 2) leftPath' leftOutputs' rightPath' rightOutputs'
+                        _ -> do
+                            echo (explain ("The set of inputs named `" <> inputName <> "` do not match"))
+                            diffWith leftExtraPaths rightExtraPaths $ \(sign, extraPaths) -> do
+                                forM_ (Data.Map.toList extraPaths) $ \(extraPath, outputs) -> do
+                                    echo ("    " <> sign (pathToText extraPath <> renderOutputs outputs))
   where
     echo text = Data.Text.IO.putStrLn (Data.Text.replicate indent " " <> text)
 
