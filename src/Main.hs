@@ -70,6 +70,9 @@ red text = "\ESC[1;31m" <> text <> "\ESC[0m"
 green :: Text -> Text
 green text = "\ESC[1;32m" <> text <> "\ESC[0m"
 
+grey :: Text -> Text
+grey text = "\ESC[1;2m" <> text <> "\ESC[0m"
+
 minus :: Text -> Text
 minus text = red ("- " <> text)
 
@@ -96,9 +99,14 @@ diffText left right = Data.Text.concat (fmap renderChunk chunks)
 
     chunks = Data.Algorithm.Diff.getGroupedDiff leftString rightString
 
-    renderChunk (First  l) = green (Data.Text.pack l)
-    renderChunk (Second r) = red   (Data.Text.pack r)
-    renderChunk (Both l _) = Data.Text.pack l
+    shorten text =
+        if 40 <= Data.Text.length text 
+        then Data.Text.take 19 text <> "..." <> Data.Text.takeEnd 18 text
+        else text
+
+    renderChunk (First  l) = green          (Data.Text.pack l)
+    renderChunk (Second r) = red            (Data.Text.pack r)
+    renderChunk (Both l _) = grey  (shorten (Data.Text.pack l))
 
 diff :: Int -> FilePath -> Set Text -> FilePath -> Set Text -> IO ()
 diff indent leftPath leftOutputs rightPath rightOutputs = do
@@ -168,7 +176,7 @@ diff indent leftPath leftOutputs rightPath rightOutputs = do
                         forM_ (Data.Map.toList extraEnv) $ \(key, value) -> do
                             echo (sign (key <> "=" <> value))
                     forM_ (Data.Map.toList bothEnv) $ \(key, (leftValue, rightValue)) -> do
-                        if leftValue == rightValue
+                        if leftValue == rightValue || key == "out"
                         then return ()
                         else echo (key <> "=" <> diffText leftValue rightValue)
   where
