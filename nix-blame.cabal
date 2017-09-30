@@ -1,0 +1,27 @@
+name:                nix-blame
+version:             1.0.0
+synopsis:            Explain why two Nix derivations differ
+description:         This package provides a @nix-blame@ executable which
+                     explains why two Nix derivations (i.e. @*.drv@ files)
+                     differ
+homepage:            https://github.com/Gabriel439/nix-blame
+license:             BSD3
+license-file:        LICENSE
+author:              Gabriel Gonzalez
+maintainer:          Gabriel439@gmail.com
+copyright:           2017 Gabriel Gonzalez
+category:            System
+build-type:          Simple
+cabal-version:       >= 1.10
+
+executable nix-blame
+  main-is:             Main.hs
+  build-depends:       base             >= 4.9  && < 4.10
+                     , attoparsec       >= 0.13 && < 0.14
+                     , containers       >= 0.5  && < 0.6
+                     , text             >= 1.2  && < 1.3
+                     , system-filepath  >= 0.4  && < 0.5
+                     , optparse-generic >= 1.1  && < 1.2
+                     , nix-derivation   >= 1.0  && < 1.1
+  hs-source-dirs:      src
+  default-language:    Haskell2010
