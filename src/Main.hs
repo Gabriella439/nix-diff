@@ -111,13 +111,15 @@ diff indent leftPath leftOutputs rightPath rightOutputs = do
             else do 
                 let assocs = Data.Map.toList (innerJoin leftInputs rightInputs)
                 forM_ assocs $ \(inputName, (leftPaths, rightPaths)) -> do
-                    let leftExtraPaths  = Data.Map.difference leftPaths  rightPaths
-                    let rightExtraPaths = Data.Map.difference rightPaths leftPaths
-                    if leftPaths == rightPaths
-                    then do
-                        return ()
-                    else case (Data.Map.toList leftExtraPaths, Data.Map.toList rightExtraPaths) of
-                        ([(leftPath', leftOutputs')], [(rightPath', rightOutputs')]) | leftOutputs' == rightOutputs' -> do
+                    let leftExtraPaths =
+                            Data.Map.difference leftPaths  rightPaths
+                    let rightExtraPaths =
+                            Data.Map.difference rightPaths leftPaths
+                    case (Data.Map.toList leftExtraPaths, Data.Map.toList rightExtraPaths) of
+                        _   | leftPaths == rightPaths -> do
+                            return ()
+                        ([(leftPath', leftOutputs')], [(rightPath', rightOutputs')])
+                            | leftOutputs' == rightOutputs' -> do
                             let [(leftPath' , leftOutputs' )] =
                                     Data.Map.toList leftExtraPaths
                             let [(rightPath', rightOutputs')] =
