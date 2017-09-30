@@ -77,13 +77,17 @@ diffWith l r k = do
     k (minus, l)
     k (plus , r)
 
-diff :: Int -> FilePath -> FilePath -> IO ()
-diff indent leftPath rightPath = do
+renderOutputs :: Set Text -> Text
+renderOutputs outputs =
+    ":{" <> Data.Text.intercalate "," (Data.Set.toList outputs) <> "}"
+
+diff :: Int -> FilePath -> Set Text -> FilePath -> Set Text -> IO ()
+diff indent leftPath leftOutputs rightPath rightOutputs = do
     if leftPath == rightPath
     then return ()
     else do
-        diffWith leftPath rightPath $ \(sign, path) -> do
-            echo (sign (pathToText path))
+        diffWith (leftPath, leftOutputs) (rightPath, rightOutputs) $ \(sign, (path, outputs)) -> do
+            echo (sign (pathToText path <> renderOutputs outputs))
 
         if derivationName leftPath /= derivationName rightPath
         then do
@@ -106,31 +110,30 @@ diff indent leftPath rightPath = do
                         echo ("    " <> sign name)
             else do 
                 let assocs = Data.Map.toList (innerJoin leftInputs rightInputs)
-                forM_ assocs $ \(inputName, (leftMap, rightMap)) -> do
-                    let leftExtraMap  = Data.Map.difference leftMap  rightMap
-                    let rightExtraMap = Data.Map.difference rightMap leftMap
-                    if Data.Map.null leftExtraMap && Data.Map.null rightExtraMap
+                forM_ assocs $ \(inputName, (leftPaths, rightPaths)) -> do
+                    let leftExtraPaths  = Data.Map.difference leftPaths  rightPaths
+                    let rightExtraPaths = Data.Map.difference rightPaths leftPaths
+                    if leftPaths == rightPaths
                     then do
-                        -- Check for differences in outputs
                         return ()
-                    else if not (Data.Map.size leftExtraMap == 1 && Data.Map.size rightExtraMap == 1)
+                    else if not (Data.Map.size leftExtraPaths == 1 && Data.Map.size rightExtraPaths == 1)
                     then do
                         echo (explain ("The set of inputs named `" <> inputName <> "` do not match"))
-                        diffWith leftExtraMap rightExtraMap $ \(sign, inputMap) -> do
+                        diffWith leftExtraPaths rightExtraPaths $ \(sign, inputMap) -> do
                             forM_ (Data.Map.toList inputMap) $ \(path, outputs) -> do
-                                let prettyOutputs =
-                                        "{" <> Data.Text.intercalate "," (Data.Set.toList outputs) <> "}"
-                                echo ("    " <> sign (pathToText path <> ":" <> prettyOutputs))
+                                echo ("    " <> sign (pathToText path <> renderOutputs outputs))
                     else do
                         -- Check for differences in outputs
-                        let [leftPath' ] = Data.Map.keys leftExtraMap
-                        let [rightPath'] = Data.Map.keys rightExtraMap
+                        let [(leftPath' , leftOutputs' )] =
+                                Data.Map.toList leftExtraPaths
+                        let [(rightPath', rightOutputs')] =
+                                Data.Map.toList rightExtraPaths
                         echo (explain ("The input named `" <> inputName <> "` differs"))
-                        diff (indent + 2) leftPath' rightPath'
+                        diff (indent + 2) leftPath' leftOutputs' rightPath' rightOutputs'
   where
     echo text = Data.Text.IO.putStrLn (Data.Text.replicate indent " " <> text)
 
 main :: IO ()
 main = do
     Options left right <- Options.Generic.unwrapRecord "Explain why two derivations differ"
-    diff 0 left right
+    diff 0 left (Data.Set.singleton "out") right (Data.Set.singleton "out")
