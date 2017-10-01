@@ -1,10 +1,10 @@
-name:                nix-blame
+name:                nix-diff
 version:             1.0.0
 synopsis:            Explain why two Nix derivations differ
-description:         This package provides a @nix-blame@ executable which
+description:         This package provides a @nix-diff@ executable which
                      explains why two Nix derivations (i.e. @*.drv@ files)
                      differ
-homepage:            https://github.com/Gabriel439/nix-blame
+homepage:            https://github.com/Gabriel439/nix-diff
 license:             BSD3
 license-file:        LICENSE
 author:              Gabriel Gonzalez
@@ -14,7 +14,7 @@ category:            System
 build-type:          Simple
 cabal-version:       >= 1.10
 
-executable nix-blame
+executable nix-diff
   main-is:             Main.hs
   build-depends:       base             >= 4.9  && < 4.10
                      , attoparsec       >= 0.13 && < 0.14
