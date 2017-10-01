@@ -91,13 +91,25 @@ renderOutputs :: Set Text -> Text
 renderOutputs outputs =
     ":{" <> Data.Text.intercalate "," (Data.Set.toList outputs) <> "}"
 
-diffText :: Text -> Text -> Text
-diffText left right = Data.Text.concat (fmap renderChunk chunks)
+diffText :: Int -> Text -> Text -> Text
+diffText indent left right = format (Data.Text.concat (fmap renderChunk chunks))
   where
     leftString  = Data.Text.unpack left
     rightString = Data.Text.unpack right
 
     chunks = Data.Algorithm.Diff.getGroupedDiff leftString rightString
+
+    format text =
+        if 80 <= indent + Data.Text.length text
+        then ( ("''\n" <>)
+             . (<> prefix <> "''")
+             . Data.Text.unlines
+             . fmap (\line -> prefix <> "    " <> line)
+             . Data.Text.lines
+             ) text
+        else text
+
+    prefix = Data.Text.replicate indent " "
 
     renderChunk (First  l) = green (Data.Text.pack l)
     renderChunk (Second r) = red   (Data.Text.pack r)
@@ -172,7 +184,7 @@ diff indent leftPath leftOutputs rightPath rightOutputs = do
                     forM_ (Data.Map.toList bothEnv) $ \(key, (leftValue, rightValue)) -> do
                         if leftValue == rightValue || key == "out"
                         then return ()
-                        else echo (key <> "=" <> diffText leftValue rightValue)
+                        else echo (key <> "=" <> diffText indent leftValue rightValue)
   where
     echo text = Data.Text.IO.putStrLn (Data.Text.replicate indent " " <> text)
 
