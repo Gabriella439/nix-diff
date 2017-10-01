@@ -109,11 +109,18 @@ diffText indent left right = format (Data.Text.concat (fmap renderChunk chunks))
              ) text
         else text
 
+    highlight = Data.Text.concatMap adapt
+      where
+        adapt ' '  = "█"
+        adapt '\n' = "█\n"
+        adapt '\t' = "█\t"
+        adapt  c   =  Data.Text.singleton c
+
     prefix = Data.Text.replicate indent " "
 
-    renderChunk (First  l) = green (Data.Text.pack l)
-    renderChunk (Second r) = red   (Data.Text.pack r)
-    renderChunk (Both l _) = grey  (Data.Text.pack l)
+    renderChunk (First  l) = green (highlight (Data.Text.pack l))
+    renderChunk (Second r) = red   (highlight (Data.Text.pack r))
+    renderChunk (Both l _) = grey             (Data.Text.pack l)
 
 diff :: Int -> FilePath -> Set Text -> FilePath -> Set Text -> IO ()
 diff indent leftPath leftOutputs rightPath rightOutputs = do
