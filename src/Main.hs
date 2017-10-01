@@ -99,14 +99,9 @@ diffText left right = Data.Text.concat (fmap renderChunk chunks)
 
     chunks = Data.Algorithm.Diff.getGroupedDiff leftString rightString
 
-    shorten text =
-        if 40 <= Data.Text.length text 
-        then Data.Text.take 19 text <> "..." <> Data.Text.takeEnd 18 text
-        else text
-
-    renderChunk (First  l) = green          (Data.Text.pack l)
-    renderChunk (Second r) = red            (Data.Text.pack r)
-    renderChunk (Both l _) = grey  (shorten (Data.Text.pack l))
+    renderChunk (First  l) = green (Data.Text.pack l)
+    renderChunk (Second r) = red   (Data.Text.pack r)
+    renderChunk (Both l _) = grey  (Data.Text.pack l)
 
 diff :: Int -> FilePath -> Set Text -> FilePath -> Set Text -> IO ()
 diff indent leftPath leftOutputs rightPath rightOutputs = do
@@ -161,13 +156,16 @@ diff indent leftPath leftOutputs rightPath rightOutputs = do
                 if or descended
                 then return ()
                 else do
+                    -- Display a richer diff for this derivation if there was no
+                    -- difference in our input derivations
                     let leftEnv  = Nix.Derivation.env leftDerivation
                     let rightEnv = Nix.Derivation.env rightDerivation
-                    let leftExtraEnv =
-                            Data.Map.difference leftEnv rightEnv
-                    let rightExtraEnv =
-                            Data.Map.difference leftEnv rightEnv
+
+                    let leftExtraEnv  = Data.Map.difference leftEnv rightEnv
+                    let rightExtraEnv = Data.Map.difference leftEnv rightEnv
+
                     let bothEnv = innerJoin leftEnv rightEnv
+
                     diffWith leftExtraEnv rightExtraEnv $ \(sign, extraEnv) -> do
                         forM_ (Data.Map.toList extraEnv) $ \(key, value) -> do
                             echo (sign (key <> "=" <> value))
