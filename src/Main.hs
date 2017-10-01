@@ -149,10 +149,6 @@ diff indent leftPath leftOutputs rightPath rightOutputs = do
                             return False
                         ([(leftPath', leftOutputs')], [(rightPath', rightOutputs')])
                             | leftOutputs' == rightOutputs' -> do
-                            let [(leftPath' , leftOutputs' )] =
-                                    Data.Map.toList leftExtraPaths
-                            let [(rightPath', rightOutputs')] =
-                                    Data.Map.toList rightExtraPaths
                             echo (explain ("The input named `" <> inputName <> "` differs"))
                             diff (indent + 2) leftPath' leftOutputs' rightPath' rightOutputs'
                             return True
