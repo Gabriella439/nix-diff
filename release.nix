@@ -14,8 +14,6 @@ let
       haskellPackages = pkgs.haskellPackages.override {
         overrides = haskellPackagesNew: haskellPackagesOld: {
           nix-diff = haskellPackagesNew.callPackage ./default.nix { };
-
-          prettyprinter = haskellPackagesNew.callPackage ./prettyprinter.nix { };
         };
       };
     };
