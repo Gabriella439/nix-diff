@@ -35,9 +35,22 @@ pathToText path =
         Left  text -> text
         Right text -> text
 
+{-| Extract the name of a derivation (i.e. the part after the hash)
+
+    This is used to guess which derivations are related to one another, even
+    though their hash might differ
+
+    Note that this assumes that the path name is:
+
+    > /nix/store/${32_CHARACTER_HASH}-${NAME}.drv
+
+    Nix technically does not require that the Nix store is actually stored
+    underneath `/nix/store`, but this is the overwhelmingly common use case
+-}
 derivationName :: FilePath -> Text
 derivationName = Data.Text.dropEnd 4 . Data.Text.drop 44 . pathToText
 
+-- | Group input derivations by their name
 groupByName :: Map FilePath (Set Text) -> Map Text (Map FilePath (Set Text))
 groupByName m = Data.Map.fromList assocs
   where
@@ -47,14 +60,20 @@ groupByName m = Data.Map.fromList assocs
 
     assocs = fmap toAssoc (Data.Map.keys m)
 
-readInputs :: FilePath -> IO Derivation
-readInputs path = do
+-- | Read and parse a derivation from a file
+readDerivation :: FilePath -> IO Derivation
+readDerivation path = do
     let string = Filesystem.Path.CurrentOS.encodeString path
     text <- Data.Text.IO.readFile string
     case Data.Attoparsec.Text.parse Nix.Derivation.parseDerivation text of
-        Done _ derivation -> return derivation
-        _                 -> fail "Could not parse derivation"
+        Done _ derivation -> do
+            return derivation
+        _ -> do
+            fail ("Could not parse a derivation from this file: " ++ string)
 
+{-| Join two `Map`s on shared keys, discarding keys which are not present in
+    both `Map`s
+-}
 innerJoin :: Ord k => Map k a -> Map k b -> Map k (a, b)
 innerJoin = Data.Map.mergeWithKey both left right
   where
@@ -64,34 +83,52 @@ innerJoin = Data.Map.mergeWithKey both left right
 
     right _ = Data.Map.empty
 
+-- | Color text red
 red :: Text -> Text
 red text = "\ESC[1;31m" <> text <> "\ESC[0m"
 
+-- | Color text green
 green :: Text -> Text
 green text = "\ESC[1;32m" <> text <> "\ESC[0m"
 
+-- | Color text grey
 grey :: Text -> Text
 grey text = "\ESC[1;2m" <> text <> "\ESC[0m"
 
+-- | Format the left half of a diff
 minus :: Text -> Text
 minus text = red ("- " <> text)
 
+-- | Format the right half of a diff
 plus :: Text -> Text
 plus text = green ("+ " <> text)
 
+-- | Format text explaining a diff
 explain :: Text -> Text
 explain text = "• " <> text
 
+{-| Utility to automate a common pattern of printing the two halves of a diff.
+    This passes the correct formatting function to each half
+-}
 diffWith :: Monad m => a -> a -> ((Text -> Text, a) -> m ()) -> m ()
 diffWith l r k = do
     k (minus, l)
     k (plus , r)
 
+-- | Format the derivation outputs
 renderOutputs :: Set Text -> Text
 renderOutputs outputs =
     ":{" <> Data.Text.intercalate "," (Data.Set.toList outputs) <> "}"
 
-diffText :: Int -> Text -> Text -> Text
+-- | Diff two `Text` values
+diffText
+    :: Int
+    -- ^ Current indentation level (used to indent multi-line diffs)
+    -> Text
+    -- ^ Left value to compare
+    -> Text
+    -- ^ Right value to compare
+    -> Text
 diffText indent left right = format (Data.Text.concat (fmap renderChunk chunks))
   where
     leftString  = Data.Text.unpack left
@@ -101,13 +138,13 @@ diffText indent left right = format (Data.Text.concat (fmap renderChunk chunks))
 
     format text =
         if 80 <= indent + Data.Text.length text
-        then ( ("''\n" <>)
-             . (<> prefix <> "''")
-             . Data.Text.unlines
-             . fmap (\line -> prefix <> "    " <> line)
-             . Data.Text.lines
-             ) text
+        then "''\n" <> indentedText <> prefix <> "''"
         else text
+      where
+        indentedText =
+            (Data.Text.unlines . fmap indentLine . Data.Text.lines) text
+          where
+            indentLine line = prefix <> "    " <> line
 
     highlight = Data.Text.concatMap adapt
       where
@@ -122,6 +159,23 @@ diffText indent left right = format (Data.Text.concat (fmap renderChunk chunks))
     renderChunk (Second r) = red   (highlight (Data.Text.pack r))
     renderChunk (Both l _) = grey             (Data.Text.pack l)
 
+diffEnv :: Int -> Map Text Text -> Map Text Text -> IO ()
+diffEnv indent leftEnv rightEnv = do
+    let leftExtraEnv  = Data.Map.difference leftEnv rightEnv
+    let rightExtraEnv = Data.Map.difference leftEnv rightEnv
+
+    let bothEnv = innerJoin leftEnv rightEnv
+
+    diffWith leftExtraEnv rightExtraEnv $ \(sign, extraEnv) -> do
+        forM_ (Data.Map.toList extraEnv) $ \(key, value) -> do
+            echo (sign (key <> "=" <> value))
+    forM_ (Data.Map.toList bothEnv) $ \(key, (leftValue, rightValue)) -> do
+        if leftValue == rightValue || key == "out"
+        then return ()
+        else echo (key <> "=" <> diffText indent leftValue rightValue)
+  where
+    echo text = Data.Text.IO.putStrLn (Data.Text.replicate indent " " <> text)
+
 diff :: Int -> FilePath -> Set Text -> FilePath -> Set Text -> IO ()
 diff indent leftPath leftOutputs rightPath rightOutputs = do
     if leftPath == rightPath
@@ -135,8 +189,8 @@ diff indent leftPath leftOutputs rightPath rightOutputs = do
             echo (explain "The derivation names do not match")
 
         else do
-            leftDerivation  <- readInputs leftPath
-            rightDerivation <- readInputs rightPath
+            leftDerivation  <- readDerivation leftPath
+            rightDerivation <- readDerivation rightPath
             let rightInputs = groupByName (Nix.Derivation.inputDrvs leftDerivation)
             let leftInputs  = groupByName (Nix.Derivation.inputDrvs rightDerivation)
     
@@ -175,23 +229,9 @@ diff indent leftPath leftOutputs rightPath rightOutputs = do
                 if or descended
                 then return ()
                 else do
-                    -- Display a richer diff for this derivation if there was no
-                    -- difference in our input derivations
                     let leftEnv  = Nix.Derivation.env leftDerivation
                     let rightEnv = Nix.Derivation.env rightDerivation
-
-                    let leftExtraEnv  = Data.Map.difference leftEnv rightEnv
-                    let rightExtraEnv = Data.Map.difference leftEnv rightEnv
-
-                    let bothEnv = innerJoin leftEnv rightEnv
-
-                    diffWith leftExtraEnv rightExtraEnv $ \(sign, extraEnv) -> do
-                        forM_ (Data.Map.toList extraEnv) $ \(key, value) -> do
-                            echo (sign (key <> "=" <> value))
-                    forM_ (Data.Map.toList bothEnv) $ \(key, (leftValue, rightValue)) -> do
-                        if leftValue == rightValue || key == "out"
-                        then return ()
-                        else echo (key <> "=" <> diffText indent leftValue rightValue)
+                    diffEnv indent leftEnv rightEnv
   where
     echo text = Data.Text.IO.putStrLn (Data.Text.replicate indent " " <> text)
 
