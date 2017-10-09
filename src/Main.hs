@@ -87,9 +87,17 @@ innerJoin = Data.Map.mergeWithKey both left right
 red :: Text -> Text
 red text = "\ESC[1;31m" <> text <> "\ESC[0m"
 
+-- | Color text background red
+redBackground  :: Text -> Text
+redBackground text = "\ESC[41m" <> text <> "\ESC[0m"
+
 -- | Color text green
 green :: Text -> Text
 green text = "\ESC[1;32m" <> text <> "\ESC[0m"
+
+-- | Color text background green
+greenBackground :: Text -> Text
+greenBackground text = "\ESC[42m" <> text <> "\ESC[0m"
 
 -- | Color text grey
 grey :: Text -> Text
@@ -146,20 +154,21 @@ diffText indent left right = format (Data.Text.concat (fmap renderChunk chunks))
           where
             indentLine line = prefix <> "    " <> line
 
-    highlight = Data.Text.concatMap adapt
-      where
-        adapt ' '  = "█"
-        adapt '\n' = "█\n"
-        adapt '\t' = "█\t"
-        adapt  c   =  Data.Text.singleton c
-
     prefix = Data.Text.replicate indent " "
 
-    renderChunk (First  l) = green (highlight (Data.Text.pack l))
-    renderChunk (Second r) = red   (highlight (Data.Text.pack r))
-    renderChunk (Both l _) = grey             (Data.Text.pack l)
+    renderChunk (First  l) = greenBackground (Data.Text.pack l)
+    renderChunk (Second r) = redBackground   (Data.Text.pack r)
+    renderChunk (Both l _) = grey            (Data.Text.pack l)
 
-diffEnv :: Int -> Map Text Text -> Map Text Text -> IO ()
+-- | Diff two environments
+diffEnv
+    :: Int
+    -- ^ Current indentation level (used to indent multi-line diffs)
+    -> Map Text Text
+    -- ^ Left environment to compare
+    -> Map Text Text
+    -- ^ Right environment to compare
+    -> IO ()
 diffEnv indent leftEnv rightEnv = do
     let leftExtraEnv  = Data.Map.difference leftEnv rightEnv
     let rightExtraEnv = Data.Map.difference leftEnv rightEnv
