@@ -156,8 +156,8 @@ diffText indent left right = format (Data.Text.concat (fmap renderChunk chunks))
 
     prefix = Data.Text.replicate indent " "
 
-    renderChunk (First  l) = greenBackground (Data.Text.pack l)
-    renderChunk (Second r) = redBackground   (Data.Text.pack r)
+    renderChunk (First  l) = redBackground   (Data.Text.pack l)
+    renderChunk (Second r) = greenBackground (Data.Text.pack r)
     renderChunk (Both l _) = grey            (Data.Text.pack l)
 
 -- | Diff two environments
