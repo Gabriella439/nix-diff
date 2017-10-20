@@ -200,8 +200,8 @@ diff indent leftPath leftOutputs rightPath rightOutputs = do
         else do
             leftDerivation  <- readDerivation leftPath
             rightDerivation <- readDerivation rightPath
-            let rightInputs = groupByName (Nix.Derivation.inputDrvs leftDerivation)
-            let leftInputs  = groupByName (Nix.Derivation.inputDrvs rightDerivation)
+            let leftInputs  = groupByName (Nix.Derivation.inputDrvs leftDerivation)
+            let rightInputs = groupByName (Nix.Derivation.inputDrvs rightDerivation)
     
             let leftNames  = Data.Map.keysSet leftInputs
             let rightNames = Data.Map.keysSet rightInputs
