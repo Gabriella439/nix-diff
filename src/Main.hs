@@ -25,6 +25,8 @@ import qualified Data.Text.IO
 import qualified Filesystem.Path.CurrentOS
 import qualified Nix.Derivation
 import qualified Options.Generic
+import qualified System.Posix.IO
+import qualified System.Posix.Terminal
 
 data Options w = Options FilePath FilePath
     deriving (Generic, ParseRecord)
@@ -83,33 +85,40 @@ innerJoin = Data.Map.mergeWithKey both left right
 
     right _ = Data.Map.empty
 
+data TTY = IsTTY | NotTTY
+
 -- | Color text red
-red :: Text -> Text
-red text = "\ESC[1;31m" <> text <> "\ESC[0m"
+red :: TTY -> Text -> Text
+red  IsTTY text = "\ESC[1;31m" <> text <> "\ESC[0m"
+red NotTTY text = text
 
 -- | Color text background red
-redBackground  :: Text -> Text
-redBackground text = "\ESC[41m" <> text <> "\ESC[0m"
+redBackground  :: TTY -> Text -> Text
+redBackground  IsTTY text = "\ESC[41m" <> text <> "\ESC[0m"
+redBackground NotTTY text = "←" <> text <> "←"
 
 -- | Color text green
-green :: Text -> Text
-green text = "\ESC[1;32m" <> text <> "\ESC[0m"
+green :: TTY -> Text -> Text
+green  IsTTY text = "\ESC[1;32m" <> text <> "\ESC[0m"
+green NotTTY text = text
 
 -- | Color text background green
-greenBackground :: Text -> Text
-greenBackground text = "\ESC[42m" <> text <> "\ESC[0m"
+greenBackground :: TTY -> Text -> Text
+greenBackground  IsTTY text = "\ESC[42m" <> text <> "\ESC[0m"
+greenBackground NotTTY text = "→" <> text <> "→"
 
 -- | Color text grey
-grey :: Text -> Text
-grey text = "\ESC[1;2m" <> text <> "\ESC[0m"
+grey :: TTY -> Text -> Text
+grey  IsTTY text = "\ESC[1;2m" <> text <> "\ESC[0m"
+grey NotTTY text = text
 
 -- | Format the left half of a diff
-minus :: Text -> Text
-minus text = red ("- " <> text)
+minus :: TTY -> Text -> Text
+minus tty text = red tty ("- " <> text)
 
 -- | Format the right half of a diff
-plus :: Text -> Text
-plus text = green ("+ " <> text)
+plus :: TTY -> Text -> Text
+plus tty text = green tty ("+ " <> text)
 
 -- | Format text explaining a diff
 explain :: Text -> Text
@@ -118,10 +127,10 @@ explain text = "• " <> text
 {-| Utility to automate a common pattern of printing the two halves of a diff.
     This passes the correct formatting function to each half
 -}
-diffWith :: Monad m => a -> a -> ((Text -> Text, a) -> m ()) -> m ()
-diffWith l r k = do
-    k (minus, l)
-    k (plus , r)
+diffWith :: Monad m => TTY -> a -> a -> ((Text -> Text, a) -> m ()) -> m ()
+diffWith tty l r k = do
+    k (minus tty, l)
+    k (plus  tty, r)
 
 -- | Format the derivation outputs
 renderOutputs :: Set Text -> Text
@@ -130,14 +139,16 @@ renderOutputs outputs =
 
 -- | Diff two `Text` values
 diffText
-    :: Int
+    :: TTY
+    -- ^ Whether or not we are writing to a terminal
+    -> Int
     -- ^ Current indentation level (used to indent multi-line diffs)
     -> Text
     -- ^ Left value to compare
     -> Text
     -- ^ Right value to compare
     -> Text
-diffText indent left right = format (Data.Text.concat (fmap renderChunk chunks))
+diffText tty indent left right = format (Data.Text.concat (fmap renderChunk chunks))
   where
     leftString  = Data.Text.unpack left
     rightString = Data.Text.unpack right
@@ -156,41 +167,43 @@ diffText indent left right = format (Data.Text.concat (fmap renderChunk chunks))
 
     prefix = Data.Text.replicate indent " "
 
-    renderChunk (First  l) = redBackground   (Data.Text.pack l)
-    renderChunk (Second r) = greenBackground (Data.Text.pack r)
-    renderChunk (Both l _) = grey            (Data.Text.pack l)
+    renderChunk (First  l) = redBackground   tty (Data.Text.pack l)
+    renderChunk (Second r) = greenBackground tty (Data.Text.pack r)
+    renderChunk (Both l _) = grey            tty (Data.Text.pack l)
 
 -- | Diff two environments
 diffEnv
-    :: Int
+    :: TTY
+    -- ^ Whether or not we are writing to a terminal
+    -> Int
     -- ^ Current indentation level (used to indent multi-line diffs)
     -> Map Text Text
     -- ^ Left environment to compare
     -> Map Text Text
     -- ^ Right environment to compare
     -> IO ()
-diffEnv indent leftEnv rightEnv = do
+diffEnv tty indent leftEnv rightEnv = do
     let leftExtraEnv  = Data.Map.difference leftEnv rightEnv
     let rightExtraEnv = Data.Map.difference leftEnv rightEnv
 
     let bothEnv = innerJoin leftEnv rightEnv
 
-    diffWith leftExtraEnv rightExtraEnv $ \(sign, extraEnv) -> do
+    diffWith tty leftExtraEnv rightExtraEnv $ \(sign, extraEnv) -> do
         forM_ (Data.Map.toList extraEnv) $ \(key, value) -> do
             echo (sign (key <> "=" <> value))
     forM_ (Data.Map.toList bothEnv) $ \(key, (leftValue, rightValue)) -> do
         if leftValue == rightValue || key == "out"
         then return ()
-        else echo (key <> "=" <> diffText indent leftValue rightValue)
+        else echo (key <> "=" <> diffText tty indent leftValue rightValue)
   where
     echo text = Data.Text.IO.putStrLn (Data.Text.replicate indent " " <> text)
 
-diff :: Int -> FilePath -> Set Text -> FilePath -> Set Text -> IO ()
-diff indent leftPath leftOutputs rightPath rightOutputs = do
+diff :: TTY -> Int -> FilePath -> Set Text -> FilePath -> Set Text -> IO ()
+diff tty indent leftPath leftOutputs rightPath rightOutputs = do
     if leftPath == rightPath
     then return ()
     else do
-        diffWith (leftPath, leftOutputs) (rightPath, rightOutputs) $ \(sign, (path, outputs)) -> do
+        diffWith tty (leftPath, leftOutputs) (rightPath, rightOutputs) $ \(sign, (path, outputs)) -> do
             echo (sign (pathToText path <> renderOutputs outputs))
 
         if derivationName leftPath /= derivationName rightPath
@@ -211,7 +224,7 @@ diff indent leftPath leftOutputs rightPath rightOutputs = do
             if leftNames /= rightNames
             then do
                 echo (explain "The set of input names do not match:")
-                diffWith leftExtraNames rightExtraNames $ \(sign, names) -> do
+                diffWith tty leftExtraNames rightExtraNames $ \(sign, names) -> do
                     forM_ names $ \name -> do
                         echo ("    " <> sign name)
             else do 
@@ -227,11 +240,11 @@ diff indent leftPath leftOutputs rightPath rightOutputs = do
                         ([(leftPath', leftOutputs')], [(rightPath', rightOutputs')])
                             | leftOutputs' == rightOutputs' -> do
                             echo (explain ("The input named `" <> inputName <> "` differs"))
-                            diff (indent + 2) leftPath' leftOutputs' rightPath' rightOutputs'
+                            diff tty (indent + 2) leftPath' leftOutputs' rightPath' rightOutputs'
                             return True
                         _ -> do
                             echo (explain ("The set of inputs named `" <> inputName <> "` do not match"))
-                            diffWith leftExtraPaths rightExtraPaths $ \(sign, extraPaths) -> do
+                            diffWith tty leftExtraPaths rightExtraPaths $ \(sign, extraPaths) -> do
                                 forM_ (Data.Map.toList extraPaths) $ \(extraPath, outputs) -> do
                                     echo ("    " <> sign (pathToText extraPath <> renderOutputs outputs))
                             return False
@@ -240,11 +253,13 @@ diff indent leftPath leftOutputs rightPath rightOutputs = do
                 else do
                     let leftEnv  = Nix.Derivation.env leftDerivation
                     let rightEnv = Nix.Derivation.env rightDerivation
-                    diffEnv indent leftEnv rightEnv
+                    diffEnv tty indent leftEnv rightEnv
   where
     echo text = Data.Text.IO.putStrLn (Data.Text.replicate indent " " <> text)
 
 main :: IO ()
 main = do
     Options left right <- Options.Generic.unwrapRecord "Explain why two derivations differ"
-    diff 0 left (Data.Set.singleton "out") right (Data.Set.singleton "out")
+    b <- System.Posix.Terminal.queryTerminal System.Posix.IO.stdOutput
+    let tty = if b then IsTTY else NotTTY
+    diff tty 0 left (Data.Set.singleton "out") right (Data.Set.singleton "out")
