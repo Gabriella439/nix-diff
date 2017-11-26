@@ -298,6 +298,17 @@ diffSrcs tty indent leftSrcs rightSrcs = do
   where
     echo text = Data.Text.IO.putStrLn (Data.Text.replicate indent " " <> text)
 
+diffPlatform :: TTY -> Int -> Text -> Text -> IO ()
+diffPlatform tty indent leftPlatform rightPlatform = do
+    if leftPlatform == rightPlatform
+    then return ()
+    else do
+        echo (explain "The platforms do not match")
+        diffWith tty leftPlatform rightPlatform $ \(sign, platform) -> do
+            echo ("    " <> sign platform)
+  where
+    echo text = Data.Text.IO.putStrLn (Data.Text.replicate indent " " <> text)
+
 diff :: TTY -> Int -> FilePath -> Set Text -> FilePath -> Set Text -> IO ()
 diff tty indent leftPath leftOutputs rightPath rightOutputs = do
     if leftPath == rightPath
@@ -315,6 +326,15 @@ diff tty indent leftPath leftOutputs rightPath rightOutputs = do
         else do
             leftDerivation  <- readDerivation leftPath
             rightDerivation <- readDerivation rightPath
+
+            let leftOuts = Nix.Derivation.outputs leftDerivation
+            let rightOuts = Nix.Derivation.outputs rightDerivation
+            diffOutputs tty indent leftOuts rightOuts
+
+            let leftPlatform  = Nix.Derivation.platform leftDerivation
+            let rightPlatform = Nix.Derivation.platform rightDerivation
+            diffPlatform tty indent leftPlatform rightPlatform
+
             let leftInputs  = groupByName (Nix.Derivation.inputDrvs leftDerivation)
             let rightInputs = groupByName (Nix.Derivation.inputDrvs rightDerivation)
     
@@ -353,10 +373,6 @@ diff tty indent leftPath leftOutputs rightPath rightOutputs = do
                 if or descended
                 then return ()
                 else do
-                    let leftOuts = Nix.Derivation.outputs leftDerivation
-                    let rightOuts = Nix.Derivation.outputs rightDerivation
-                    diffOutputs tty indent leftOuts rightOuts
-
                     let leftSrcs  = Nix.Derivation.inputSrcs leftDerivation
                     let rightSrcs = Nix.Derivation.inputSrcs rightDerivation
                     differed <- diffSrcs tty indent leftSrcs rightSrcs
