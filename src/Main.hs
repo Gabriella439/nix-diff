@@ -263,10 +263,12 @@ diff tty indent leftPath leftOutputs rightPath rightOutputs = do
                     let leftEnv  = Nix.Derivation.env leftDerivation
                     let rightEnv = Nix.Derivation.env rightDerivation
 
-                    let leftOuts  = Nix.Derivation.outputs leftDerivation
-                    let rightOuts = Nix.Derivation.outputs rightDerivation
+                    let leftOuts =
+                            Data.Map.keysSet (Nix.Derivation.outputs leftDerivation)
+                    let rightOuts =
+                            Data.Map.keysSet (Nix.Derivation.outputs rightDerivation)
 
-                    diffEnv tty indent leftOutputs rightOutputs leftEnv rightEnv
+                    diffEnv tty indent leftOuts rightOuts leftEnv rightEnv
   where
     echo text = Data.Text.IO.putStrLn (Data.Text.replicate indent " " <> text)
 
