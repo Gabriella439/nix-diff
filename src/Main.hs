@@ -177,12 +177,16 @@ diffEnv
     -- ^ Whether or not we are writing to a terminal
     -> Int
     -- ^ Current indentation level (used to indent multi-line diffs)
+    -> Set Text
+    -- ^ Left derivation outputs (used to exclude them from diff)
+    -> Set Text
+    -- ^ Right derivation outputs (used to exclude them from diff)
     -> Map Text Text
     -- ^ Left environment to compare
     -> Map Text Text
     -- ^ Right environment to compare
     -> IO ()
-diffEnv tty indent leftEnv rightEnv = do
+diffEnv tty indent leftOutputs rightOutputs leftEnv rightEnv = do
     let leftExtraEnv  = Data.Map.difference leftEnv  rightEnv
     let rightExtraEnv = Data.Map.difference rightEnv leftEnv
 
@@ -192,7 +196,10 @@ diffEnv tty indent leftEnv rightEnv = do
         forM_ (Data.Map.toList extraEnv) $ \(key, value) -> do
             echo (sign (key <> "=" <> value))
     forM_ (Data.Map.toList bothEnv) $ \(key, (leftValue, rightValue)) -> do
-        if leftValue == rightValue || key == "out"
+        if      leftValue == rightValue
+            ||  (   Data.Set.member key leftOutputs
+                &&  Data.Set.member key rightOutputs
+                )
         then return ()
         else echo (key <> "=" <> diffText tty indent leftValue rightValue)
   where
@@ -253,7 +260,11 @@ diff tty indent leftPath leftOutputs rightPath rightOutputs = do
                 else do
                     let leftEnv  = Nix.Derivation.env leftDerivation
                     let rightEnv = Nix.Derivation.env rightDerivation
-                    diffEnv tty indent leftEnv rightEnv
+
+                    let leftOuts  = Nix.Derivation.outputs leftDerivation
+                    let rightOuts = Nix.Derivation.outputs rightDerivation
+
+                    diffEnv tty indent leftOutputs rightOutputs leftEnv rightEnv
   where
     echo text = Data.Text.IO.putStrLn (Data.Text.replicate indent " " <> text)
 
