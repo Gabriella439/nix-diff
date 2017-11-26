@@ -216,7 +216,9 @@ diff tty indent leftPath leftOutputs rightPath rightOutputs = do
         if derivationName leftPath /= derivationName rightPath
         then do
             echo (explain "The derivation names do not match")
-
+        else if leftOutputs /= rightOutputs
+        then do
+            echo (explain "The requested outputs do not match")
         else do
             leftDerivation  <- readDerivation leftPath
             rightDerivation <- readDerivation rightPath
