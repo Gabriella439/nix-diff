@@ -282,18 +282,19 @@ diffSrcs
     -- ^ Left derivation outputs
     -> Set FilePath
     -- ^ Right derivation outputs
-    -> IO ()
+    -> IO Bool
 diffSrcs tty indent leftSrcs rightSrcs = do
     let leftExtraSrcs  = Data.Set.difference leftSrcs  rightSrcs
     let rightExtraSrcs = Data.Set.difference rightSrcs leftSrcs
 
     if Data.Set.null leftExtraSrcs && Data.Set.null rightExtraSrcs
-        then return ()
+        then return True
         else do
             echo (explain "The set of input sources do not match:")
             diffWith tty leftExtraSrcs rightExtraSrcs $ \(sign, extraSrcs) -> do
                 forM_ extraSrcs $ \extraSrc -> do
                     echo ("    " <> sign (pathToText extraSrc))
+            return False
   where
     echo text = Data.Text.IO.putStrLn (Data.Text.replicate indent " " <> text)
 
@@ -358,13 +359,16 @@ diff tty indent leftPath leftOutputs rightPath rightOutputs = do
 
                     let leftSrcs  = Nix.Derivation.inputSrcs leftDerivation
                     let rightSrcs = Nix.Derivation.inputSrcs rightDerivation
-                    diffSrcs tty indent leftSrcs rightSrcs
+                    differed <- diffSrcs tty indent leftSrcs rightSrcs
 
-                    let leftEnv  = Nix.Derivation.env leftDerivation
-                    let rightEnv = Nix.Derivation.env rightDerivation
-                    let leftOutNames  = Data.Map.keysSet leftOuts
-                    let rightOutNames = Data.Map.keysSet rightOuts
-                    diffEnv tty indent leftOutNames rightOutNames leftEnv rightEnv
+                    if not differed
+                    then return ()
+                    else do
+                        let leftEnv  = Nix.Derivation.env leftDerivation
+                        let rightEnv = Nix.Derivation.env rightDerivation
+                        let leftOutNames  = Data.Map.keysSet leftOuts
+                        let rightOutNames = Data.Map.keysSet rightOuts
+                        diffEnv tty indent leftOutNames rightOutNames leftEnv rightEnv
   where
     echo text = Data.Text.IO.putStrLn (Data.Text.replicate indent " " <> text)
 
