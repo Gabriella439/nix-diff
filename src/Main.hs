@@ -1,11 +1,13 @@
-{-# LANGUAGE DeriveGeneric     #-}
-{-# LANGUAGE DeriveAnyClass    #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE NamedFieldPuns             #-}
+{-# LANGUAGE OverloadedStrings          #-}
 
 module Main where
 
 import Control.Monad (forM, forM_)
-import Data.Algorithm.Diff (Diff(..))
+import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Monad.Reader (MonadReader, ReaderT, ask, local)
 import Data.Attoparsec.Text (IResult(..))
 import Data.Map (Map)
 import Data.Monoid ((<>))
@@ -13,9 +15,11 @@ import Data.Set (Set)
 import Data.Text (Text)
 import Filesystem.Path (FilePath)
 import Nix.Derivation (Derivation, DerivationOutput)
+import Numeric.Natural (Natural)
 import Options.Generic (Generic, ParseRecord)
 import Prelude hiding (FilePath)
 
+import qualified Control.Monad.Reader
 import qualified Data.Algorithm.Diff
 import qualified Data.Attoparsec.Text
 import qualified Data.Map
@@ -28,8 +32,29 @@ import qualified Options.Generic
 import qualified System.Posix.IO
 import qualified System.Posix.Terminal
 
-data Options w = Options FilePath FilePath
-    deriving (Generic, ParseRecord)
+data Options = Options FilePath FilePath
+    deriving (Generic)
+
+instance ParseRecord Options
+
+data Context = Context
+    { tty    :: TTY
+    , indent :: Natural
+    }
+
+newtype Diff a = Diff { unDiff :: ReaderT Context IO a }
+    deriving (Functor, Applicative, Monad, MonadReader Context, MonadIO)
+
+echo :: Text -> Diff ()
+echo text = do
+    Context { indent } <- ask
+    let n = fromIntegral indent
+    liftIO (Data.Text.IO.putStrLn (Data.Text.replicate n " " <> text))
+
+indented :: Natural -> Diff a -> Diff a
+indented n = local adapt
+  where
+    adapt context = context { indent = indent context + n }
 
 pathToText :: FilePath -> Text
 pathToText path =
@@ -63,10 +88,10 @@ groupByName m = Data.Map.fromList assocs
     assocs = fmap toAssoc (Data.Map.keys m)
 
 -- | Read and parse a derivation from a file
-readDerivation :: FilePath -> IO Derivation
+readDerivation :: FilePath -> Diff Derivation
 readDerivation path = do
     let string = Filesystem.Path.CurrentOS.encodeString path
-    text <- Data.Text.IO.readFile string
+    text <- liftIO (Data.Text.IO.readFile string)
     case Data.Attoparsec.Text.parse Nix.Derivation.parseDerivation text of
         Done _ derivation -> do
             return derivation
@@ -127,8 +152,9 @@ explain text = "• " <> text
 {-| Utility to automate a common pattern of printing the two halves of a diff.
     This passes the correct formatting function to each half
 -}
-diffWith :: Monad m => TTY -> a -> a -> ((Text -> Text, a) -> m ()) -> m ()
-diffWith tty l r k = do
+diffWith :: a -> a -> ((Text -> Text, a) -> Diff ()) -> Diff ()
+diffWith l r k = do
+    Context { tty } <- ask
     k (minus tty, l)
     k (plus  tty, r)
 
@@ -139,18 +165,14 @@ renderOutputs outputs =
 
 -- | Diff two outputs
 diffOutput
-    :: TTY
-    -- ^ Whether or not we are writing to a terminal
-    -> Int
-    -- ^ Current indentation level
-    -> Text
+    :: Text
     -- ^ Output name
     -> DerivationOutput
     -- ^ Left derivation outputs
     -> DerivationOutput
     -- ^ Right derivation outputs
-    -> IO ()
-diffOutput tty indent outputName leftOutput rightOutput = do
+    -> Diff ()
+diffOutput outputName leftOutput rightOutput = do
     -- We deliberately do not include output paths or hashes in the diff since
     -- we already expect them to differ if the inputs differ.  Instead, we focus
     -- only displaying differing inputs.
@@ -161,23 +183,17 @@ diffOutput tty indent outputName leftOutput rightOutput = do
     else do
         echo (explain ("{" <> outputName <> "}:"))
         echo (explain "    Hash algorithm:")
-        diffWith tty leftHashAlgo rightHashAlgo $ \(sign, hashAlgo) -> do
+        diffWith leftHashAlgo rightHashAlgo $ \(sign, hashAlgo) -> do
             echo ("        " <> sign hashAlgo)
-  where
-    echo text = Data.Text.IO.putStrLn (Data.Text.replicate indent " " <> text)
 
 -- | Diff two sets of outputs
 diffOutputs
-    :: TTY
-    -- ^ Whether or not we are writing to a terminal
-    -> Int
-    -- ^ Current indentation level
-    -> Map Text DerivationOutput
+    :: Map Text DerivationOutput
     -- ^ Left derivation outputs
     -> Map Text DerivationOutput
     -- ^ Right derivation outputs
-    -> IO ()
-diffOutputs tty indent leftOutputs rightOutputs = do
+    -> Diff ()
+diffOutputs leftOutputs rightOutputs = do
     let leftExtraOutputs  = Data.Map.difference leftOutputs  rightOutputs
     let rightExtraOutputs = Data.Map.difference rightOutputs leftOutputs
 
@@ -187,58 +203,54 @@ diffOutputs tty indent leftOutputs rightOutputs = do
         then return ()
         else do
             echo (explain "The set of outputs do not match:")
-            diffWith tty leftExtraOutputs rightExtraOutputs $ \(sign, extraOutputs) -> do
+            diffWith leftExtraOutputs rightExtraOutputs $ \(sign, extraOutputs) -> do
                 forM_ (Data.Map.toList extraOutputs) $ \(key, _value) -> do
                     echo ("    " <> sign ("{" <> key <> "}"))
     forM_ (Data.Map.toList bothOutputs) $ \(key, (leftOutput, rightOutput)) -> do
         if leftOutput == rightOutput
         then return ()
-        else do
-            diffOutput tty indent key leftOutput rightOutput
-  where
-    echo text = Data.Text.IO.putStrLn (Data.Text.replicate indent " " <> text)
+        else diffOutput key leftOutput rightOutput
 
 -- | Diff two `Text` values
 diffText
-    :: TTY
-    -- ^ Whether or not we are writing to a terminal
-    -> Int
-    -- ^ Current indentation level
-    -> Text
+    :: Text
     -- ^ Left value to compare
     -> Text
     -- ^ Right value to compare
-    -> Text
-diffText tty indent left right = format (Data.Text.concat (fmap renderChunk chunks))
-  where
-    leftString  = Data.Text.unpack left
-    rightString = Data.Text.unpack right
+    -> Diff Text
+diffText left right = do
+    Context { indent, tty } <- ask
+    let n = fromIntegral indent
 
-    chunks = Data.Algorithm.Diff.getGroupedDiff leftString rightString
+    let leftString  = Data.Text.unpack left
+        rightString = Data.Text.unpack right
 
-    format text =
-        if 80 <= indent + Data.Text.length text
-        then "''\n" <> indentedText <> prefix <> "''"
-        else text
-      where
-        indentedText =
-            (Data.Text.unlines . fmap indentLine . Data.Text.lines) text
+    let chunks = Data.Algorithm.Diff.getGroupedDiff leftString rightString
+
+    let prefix = Data.Text.replicate n " "
+
+    let format text =
+            if 80 <= n + Data.Text.length text
+            then "''\n" <> indentedText <> prefix <> "''"
+            else text
           where
-            indentLine line = prefix <> "    " <> line
+            indentedText =
+                (Data.Text.unlines . fmap indentLine . Data.Text.lines) text
+              where
+                indentLine line = prefix <> "    " <> line
 
-    prefix = Data.Text.replicate indent " "
+    let renderChunk (Data.Algorithm.Diff.First  l) =
+            redBackground   tty (Data.Text.pack l)
+        renderChunk (Data.Algorithm.Diff.Second r) =
+            greenBackground tty (Data.Text.pack r)
+        renderChunk (Data.Algorithm.Diff.Both l _) =
+            grey            tty (Data.Text.pack l)
 
-    renderChunk (First  l) = redBackground   tty (Data.Text.pack l)
-    renderChunk (Second r) = greenBackground tty (Data.Text.pack r)
-    renderChunk (Both l _) = grey            tty (Data.Text.pack l)
+    return (format (Data.Text.concat (fmap renderChunk chunks)))
 
 -- | Diff two environments
 diffEnv
-    :: TTY
-    -- ^ Whether or not we are writing to a terminal
-    -> Int
-    -- ^ Current indentation level
-    -> Set Text
+    :: Set Text
     -- ^ Left derivation outputs
     -> Set Text
     -- ^ Right derivation outputs
@@ -246,8 +258,8 @@ diffEnv
     -- ^ Left environment to compare
     -> Map Text Text
     -- ^ Right environment to compare
-    -> IO ()
-diffEnv tty indent leftOutputs rightOutputs leftEnv rightEnv = do
+    -> Diff ()
+diffEnv leftOutputs rightOutputs leftEnv rightEnv = do
     let leftExtraEnv  = Data.Map.difference leftEnv  rightEnv
     let rightExtraEnv = Data.Map.difference rightEnv leftEnv
 
@@ -259,7 +271,7 @@ diffEnv tty indent leftOutputs rightOutputs leftEnv rightEnv = do
     then return ()
     else do
         echo (explain "The environments do not match:")
-        diffWith tty leftExtraEnv rightExtraEnv $ \(sign, extraEnv) -> do
+        diffWith leftExtraEnv rightExtraEnv $ \(sign, extraEnv) -> do
             forM_ (Data.Map.toList extraEnv) $ \(key, value) -> do
                 echo ("    " <> sign (key <> "=" <> value))
         forM_ (Data.Map.toList bothEnv) $ \(key, (leftValue, rightValue)) -> do
@@ -268,22 +280,18 @@ diffEnv tty indent leftOutputs rightOutputs leftEnv rightEnv = do
                     &&  Data.Set.member key rightOutputs
                     )
             then return ()
-            else echo ("    " <> key <> "=" <> diffText tty (indent + 4) leftValue rightValue)
-  where
-    echo text = Data.Text.IO.putStrLn (Data.Text.replicate indent " " <> text)
+            else do
+                text <- indented 4 (diffText leftValue rightValue)
+                echo ("    " <> key <> "=" <> text)
 
 -- | Diff two environments
 diffSrcs
-    :: TTY
-    -- ^ Whether or not we are writing to a terminal
-    -> Int
-    -- ^ Current indentation level
-    -> Set FilePath
+    :: Set FilePath
     -- ^ Left derivation outputs
     -> Set FilePath
     -- ^ Right derivation outputs
-    -> IO Bool
-diffSrcs tty indent leftSrcs rightSrcs = do
+    -> Diff Bool
+diffSrcs leftSrcs rightSrcs = do
     let leftExtraSrcs  = Data.Set.difference leftSrcs  rightSrcs
     let rightExtraSrcs = Data.Set.difference rightSrcs leftSrcs
 
@@ -291,30 +299,26 @@ diffSrcs tty indent leftSrcs rightSrcs = do
         then return True
         else do
             echo (explain "The set of input sources do not match:")
-            diffWith tty leftExtraSrcs rightExtraSrcs $ \(sign, extraSrcs) -> do
+            diffWith leftExtraSrcs rightExtraSrcs $ \(sign, extraSrcs) -> do
                 forM_ extraSrcs $ \extraSrc -> do
                     echo ("    " <> sign (pathToText extraSrc))
             return False
-  where
-    echo text = Data.Text.IO.putStrLn (Data.Text.replicate indent " " <> text)
 
-diffPlatform :: TTY -> Int -> Text -> Text -> IO ()
-diffPlatform tty indent leftPlatform rightPlatform = do
+diffPlatform :: Text -> Text -> Diff ()
+diffPlatform leftPlatform rightPlatform = do
     if leftPlatform == rightPlatform
     then return ()
     else do
         echo (explain "The platforms do not match")
-        diffWith tty leftPlatform rightPlatform $ \(sign, platform) -> do
+        diffWith leftPlatform rightPlatform $ \(sign, platform) -> do
             echo ("    " <> sign platform)
-  where
-    echo text = Data.Text.IO.putStrLn (Data.Text.replicate indent " " <> text)
 
-diff :: TTY -> Int -> FilePath -> Set Text -> FilePath -> Set Text -> IO ()
-diff tty indent leftPath leftOutputs rightPath rightOutputs = do
+diff :: FilePath -> Set Text -> FilePath -> Set Text -> Diff ()
+diff leftPath leftOutputs rightPath rightOutputs = do
     if leftPath == rightPath
     then return ()
     else do
-        diffWith tty (leftPath, leftOutputs) (rightPath, rightOutputs) $ \(sign, (path, outputs)) -> do
+        diffWith (leftPath, leftOutputs) (rightPath, rightOutputs) $ \(sign, (path, outputs)) -> do
             echo (sign (pathToText path <> renderOutputs outputs))
 
         if derivationName leftPath /= derivationName rightPath
@@ -329,11 +333,11 @@ diff tty indent leftPath leftOutputs rightPath rightOutputs = do
 
             let leftOuts = Nix.Derivation.outputs leftDerivation
             let rightOuts = Nix.Derivation.outputs rightDerivation
-            diffOutputs tty indent leftOuts rightOuts
+            diffOutputs leftOuts rightOuts
 
             let leftPlatform  = Nix.Derivation.platform leftDerivation
             let rightPlatform = Nix.Derivation.platform rightDerivation
-            diffPlatform tty indent leftPlatform rightPlatform
+            diffPlatform leftPlatform rightPlatform
 
             let leftInputs  = groupByName (Nix.Derivation.inputDrvs leftDerivation)
             let rightInputs = groupByName (Nix.Derivation.inputDrvs rightDerivation)
@@ -346,7 +350,7 @@ diff tty indent leftPath leftOutputs rightPath rightOutputs = do
             if leftNames /= rightNames
             then do
                 echo (explain "The set of input names do not match:")
-                diffWith tty leftExtraNames rightExtraNames $ \(sign, names) -> do
+                diffWith leftExtraNames rightExtraNames $ \(sign, names) -> do
                     forM_ names $ \name -> do
                         echo ("    " <> sign name)
             else do 
@@ -362,11 +366,11 @@ diff tty indent leftPath leftOutputs rightPath rightOutputs = do
                         ([(leftPath', leftOutputs')], [(rightPath', rightOutputs')])
                             | leftOutputs' == rightOutputs' -> do
                             echo (explain ("The input named `" <> inputName <> "` differs"))
-                            diff tty (indent + 2) leftPath' leftOutputs' rightPath' rightOutputs'
+                            indented 2 (diff leftPath' leftOutputs' rightPath' rightOutputs')
                             return True
                         _ -> do
                             echo (explain ("The set of inputs named `" <> inputName <> "` do not match"))
-                            diffWith tty leftExtraPaths rightExtraPaths $ \(sign, extraPaths) -> do
+                            diffWith leftExtraPaths rightExtraPaths $ \(sign, extraPaths) -> do
                                 forM_ (Data.Map.toList extraPaths) $ \(extraPath, outputs) -> do
                                     echo ("    " <> sign (pathToText extraPath <> renderOutputs outputs))
                             return False
@@ -375,7 +379,7 @@ diff tty indent leftPath leftOutputs rightPath rightOutputs = do
                 else do
                     let leftSrcs  = Nix.Derivation.inputSrcs leftDerivation
                     let rightSrcs = Nix.Derivation.inputSrcs rightDerivation
-                    differed <- diffSrcs tty indent leftSrcs rightSrcs
+                    differed <- diffSrcs leftSrcs rightSrcs
 
                     if not differed
                     then return ()
@@ -384,13 +388,14 @@ diff tty indent leftPath leftOutputs rightPath rightOutputs = do
                         let rightEnv = Nix.Derivation.env rightDerivation
                         let leftOutNames  = Data.Map.keysSet leftOuts
                         let rightOutNames = Data.Map.keysSet rightOuts
-                        diffEnv tty indent leftOutNames rightOutNames leftEnv rightEnv
-  where
-    echo text = Data.Text.IO.putStrLn (Data.Text.replicate indent " " <> text)
+                        diffEnv leftOutNames rightOutNames leftEnv rightEnv
 
 main :: IO ()
 main = do
-    Options left right <- Options.Generic.unwrapRecord "Explain why two derivations differ"
+    Options left right <- Options.Generic.getRecord "Explain why two derivations differ"
     b <- System.Posix.Terminal.queryTerminal System.Posix.IO.stdOutput
     let tty = if b then IsTTY else NotTTY
-    diff tty 0 left (Data.Set.singleton "out") right (Data.Set.singleton "out")
+    let indent = 0
+    let context = Context { tty, indent }
+    let action = diff left (Data.Set.singleton "out") right (Data.Set.singleton "out")
+    Control.Monad.Reader.runReaderT (unDiff action) context
