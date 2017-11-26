@@ -12,7 +12,7 @@ import Data.Monoid ((<>))
 import Data.Set (Set)
 import Data.Text (Text)
 import Filesystem.Path (FilePath)
-import Nix.Derivation (Derivation)
+import Nix.Derivation (Derivation, DerivationOutput)
 import Options.Generic (Generic, ParseRecord)
 import Prelude hiding (FilePath)
 
@@ -137,12 +137,73 @@ renderOutputs :: Set Text -> Text
 renderOutputs outputs =
     ":{" <> Data.Text.intercalate "," (Data.Set.toList outputs) <> "}"
 
+-- | Diff two outputs
+diffOutput
+    :: TTY
+    -- ^ Whether or not we are writing to a terminal
+    -> Int
+    -- ^ Current indentation level
+    -> Text
+    -- ^ Output name
+    -> DerivationOutput
+    -- ^ Left derivation outputs
+    -> DerivationOutput
+    -- ^ Right derivation outputs
+    -> IO ()
+diffOutput tty indent outputName leftOutput rightOutput = do
+    -- We deliberately do not include output paths or hashes in the diff since
+    -- we already expect them to differ if the inputs differ.  Instead, we focus
+    -- only displaying differing inputs.
+    let leftHashAlgo  = Nix.Derivation.hashAlgo leftOutput
+    let rightHashAlgo = Nix.Derivation.hashAlgo rightOutput
+    if leftHashAlgo == rightHashAlgo
+    then return ()
+    else do
+        echo (explain ("{" <> outputName <> "}:"))
+        echo (explain "    Hash algorithm:")
+        diffWith tty leftHashAlgo rightHashAlgo $ \(sign, hashAlgo) -> do
+            echo ("        " <> sign hashAlgo)
+  where
+    echo text = Data.Text.IO.putStrLn (Data.Text.replicate indent " " <> text)
+
+-- | Diff two sets of outputs
+diffOutputs
+    :: TTY
+    -- ^ Whether or not we are writing to a terminal
+    -> Int
+    -- ^ Current indentation level
+    -> Map Text DerivationOutput
+    -- ^ Left derivation outputs
+    -> Map Text DerivationOutput
+    -- ^ Right derivation outputs
+    -> IO ()
+diffOutputs tty indent leftOutputs rightOutputs = do
+    let leftExtraOutputs  = Data.Map.difference leftOutputs  rightOutputs
+    let rightExtraOutputs = Data.Map.difference rightOutputs leftOutputs
+
+    let bothOutputs = innerJoin leftOutputs rightOutputs
+
+    if Data.Map.null leftExtraOutputs && Data.Map.null rightExtraOutputs
+        then return ()
+        else do
+            echo (explain "The set of outputs do not match:")
+            diffWith tty leftExtraOutputs rightExtraOutputs $ \(sign, extraOutputs) -> do
+                forM_ (Data.Map.toList extraOutputs) $ \(key, _value) -> do
+                    echo ("    " <> sign ("{" <> key <> "}"))
+    forM_ (Data.Map.toList bothOutputs) $ \(key, (leftOutput, rightOutput)) -> do
+        if leftOutput == rightOutput
+        then return ()
+        else do
+            diffOutput tty indent key leftOutput rightOutput
+  where
+    echo text = Data.Text.IO.putStrLn (Data.Text.replicate indent " " <> text)
+
 -- | Diff two `Text` values
 diffText
     :: TTY
     -- ^ Whether or not we are writing to a terminal
     -> Int
-    -- ^ Current indentation level (used to indent multi-line diffs)
+    -- ^ Current indentation level
     -> Text
     -- ^ Left value to compare
     -> Text
@@ -176,7 +237,7 @@ diffEnv
     :: TTY
     -- ^ Whether or not we are writing to a terminal
     -> Int
-    -- ^ Current indentation level (used to indent multi-line diffs)
+    -- ^ Current indentation level
     -> Set Text
     -- ^ Left derivation outputs (used to exclude them from diff)
     -> Set Text
@@ -260,22 +321,15 @@ diff tty indent leftPath leftOutputs rightPath rightOutputs = do
                 if or descended
                 then return ()
                 else do
+                    let leftOuts = Nix.Derivation.outputs leftDerivation
+                    let rightOuts = Nix.Derivation.outputs rightDerivation
+                    diffOutputs tty indent leftOuts rightOuts
+
                     let leftEnv  = Nix.Derivation.env leftDerivation
                     let rightEnv = Nix.Derivation.env rightDerivation
-
-                    let leftOuts =
-                            Data.Map.keysSet (Nix.Derivation.outputs leftDerivation)
-                    let rightOuts =
-                            Data.Map.keysSet (Nix.Derivation.outputs rightDerivation)
-                    if leftOuts /= rightOuts
-                    then do
-                        echo (explain "The set of outputs do not match")
-                        diffWith tty leftOuts rightOuts $ \(sign, outs) -> do
-                            forM_ outs $ \out -> do
-                                echo (sign out)
-                    else return ()
-
-                    diffEnv tty indent leftOuts rightOuts leftEnv rightEnv
+                    let leftOutNames  = Data.Map.keysSet leftOuts
+                    let rightOutNames = Data.Map.keysSet rightOuts
+                    diffEnv tty indent leftOutNames rightOutNames leftEnv rightEnv
   where
     echo text = Data.Text.IO.putStrLn (Data.Text.replicate indent " " <> text)
 
