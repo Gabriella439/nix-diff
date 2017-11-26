@@ -239,9 +239,9 @@ diffEnv
     -> Int
     -- ^ Current indentation level
     -> Set Text
-    -- ^ Left derivation outputs (used to exclude them from diff)
+    -- ^ Left derivation outputs
     -> Set Text
-    -- ^ Right derivation outputs (used to exclude them from diff)
+    -- ^ Right derivation outputs
     -> Map Text Text
     -- ^ Left environment to compare
     -> Map Text Text
@@ -253,16 +253,47 @@ diffEnv tty indent leftOutputs rightOutputs leftEnv rightEnv = do
 
     let bothEnv = innerJoin leftEnv rightEnv
 
-    diffWith tty leftExtraEnv rightExtraEnv $ \(sign, extraEnv) -> do
-        forM_ (Data.Map.toList extraEnv) $ \(key, value) -> do
-            echo (sign (key <> "=" <> value))
-    forM_ (Data.Map.toList bothEnv) $ \(key, (leftValue, rightValue)) -> do
-        if      leftValue == rightValue
-            ||  (   Data.Set.member key leftOutputs
-                &&  Data.Set.member key rightOutputs
-                )
+    if     Data.Map.null leftExtraEnv
+        && Data.Map.null rightExtraEnv
+        && all (\(left, right) -> left == right) bothEnv
+    then return ()
+    else do
+        echo (explain "The environments do not match:")
+        diffWith tty leftExtraEnv rightExtraEnv $ \(sign, extraEnv) -> do
+            forM_ (Data.Map.toList extraEnv) $ \(key, value) -> do
+                echo ("    " <> sign (key <> "=" <> value))
+        forM_ (Data.Map.toList bothEnv) $ \(key, (leftValue, rightValue)) -> do
+            if      leftValue == rightValue
+                ||  (   Data.Set.member key leftOutputs
+                    &&  Data.Set.member key rightOutputs
+                    )
+            then return ()
+            else echo ("    " <> key <> "=" <> diffText tty (indent + 4) leftValue rightValue)
+  where
+    echo text = Data.Text.IO.putStrLn (Data.Text.replicate indent " " <> text)
+
+-- | Diff two environments
+diffSrcs
+    :: TTY
+    -- ^ Whether or not we are writing to a terminal
+    -> Int
+    -- ^ Current indentation level
+    -> Set FilePath
+    -- ^ Left derivation outputs
+    -> Set FilePath
+    -- ^ Right derivation outputs
+    -> IO ()
+diffSrcs tty indent leftSrcs rightSrcs = do
+    let leftExtraSrcs  = Data.Set.difference leftSrcs  rightSrcs
+    let rightExtraSrcs = Data.Set.difference rightSrcs leftSrcs
+
+    if Data.Set.null leftExtraSrcs && Data.Set.null rightExtraSrcs
         then return ()
-        else echo (key <> "=" <> diffText tty indent leftValue rightValue)
+        else do
+            echo (explain "The set of input sources do not match:")
+            diffWith tty leftExtraSrcs rightExtraSrcs $ \(sign, extraSrcs) -> do
+                forM_ extraSrcs $ \extraSrc -> do
+                    echo ("    " <> sign (pathToText extraSrc))
   where
     echo text = Data.Text.IO.putStrLn (Data.Text.replicate indent " " <> text)
 
@@ -324,6 +355,10 @@ diff tty indent leftPath leftOutputs rightPath rightOutputs = do
                     let leftOuts = Nix.Derivation.outputs leftDerivation
                     let rightOuts = Nix.Derivation.outputs rightDerivation
                     diffOutputs tty indent leftOuts rightOuts
+
+                    let leftSrcs  = Nix.Derivation.inputSrcs leftDerivation
+                    let rightSrcs = Nix.Derivation.inputSrcs rightDerivation
+                    diffSrcs tty indent leftSrcs rightSrcs
 
                     let leftEnv  = Nix.Derivation.env leftDerivation
                     let rightEnv = Nix.Derivation.env rightDerivation
