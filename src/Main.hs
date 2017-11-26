@@ -267,6 +267,13 @@ diff tty indent leftPath leftOutputs rightPath rightOutputs = do
                             Data.Map.keysSet (Nix.Derivation.outputs leftDerivation)
                     let rightOuts =
                             Data.Map.keysSet (Nix.Derivation.outputs rightDerivation)
+                    if leftOuts /= rightOuts
+                    then do
+                        echo (explain "The set of outputs do not match")
+                        diffWith tty leftOuts rightOuts $ \(sign, outs) -> do
+                            forM_ outs $ \out -> do
+                                echo (sign out)
+                    else return ()
 
                     diffEnv tty indent leftOuts rightOuts leftEnv rightEnv
   where
