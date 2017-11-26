@@ -183,8 +183,8 @@ diffEnv
     -- ^ Right environment to compare
     -> IO ()
 diffEnv tty indent leftEnv rightEnv = do
-    let leftExtraEnv  = Data.Map.difference leftEnv rightEnv
-    let rightExtraEnv = Data.Map.difference leftEnv rightEnv
+    let leftExtraEnv  = Data.Map.difference leftEnv  rightEnv
+    let rightExtraEnv = Data.Map.difference rightEnv leftEnv
 
     let bothEnv = innerJoin leftEnv rightEnv
 
