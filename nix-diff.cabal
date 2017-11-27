@@ -14,7 +14,7 @@ category:            System
 build-type:          Simple
 tested-with:         GHC == 8.0.2, GHC == 8.2.2
 cabal-version:       >= 1.10
-extra-source-files:  README.md, img/output.png
+extra-source-files:  README.md
 
 executable nix-diff
   main-is:             Main.hs

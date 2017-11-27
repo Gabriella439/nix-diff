@@ -75,7 +75,7 @@ $ nix-diff /nix/store/6z9nr5pzs4j1v9mld517dmlcz61zy78z-nixos-system-nixos-18.03p
 
 ... which produces the following output:
 
-![](./img/output.png)
+![](https://i.imgur.com/KUB4rXx.png)
 
 ## Development status
 
