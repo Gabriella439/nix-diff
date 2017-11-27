@@ -13,13 +13,13 @@ before_cache:
 
 matrix:
   include:
-    - env: CABALVER=1.24 GHCVER=8.0.2
+    - env: CABALVER=1.24 GHCVER=8.0.2 ALEXVER=3.1.7 HAPPYVER=1.19.5
       compiler: ": #GHC 8.0.2"
-      addons: {apt: {packages: [cabal-install-1.24,ghc-8.0.2], sources: [hvr-ghc]}}
+      addons: {apt: {packages: [cabal-install-1.24,ghc-8.0.2,alex-3.1.7], sources: [hvr-ghc]}}
 
 before_install:
  - unset CC
- - export PATH=/opt/ghc/$GHCVER/bin:/opt/cabal/$CABALVER/bin:$PATH
+ - export PATH=/opt/ghc/$GHCVER/bin:/opt/cabal/$CABALVER/bin:/opt/alex/$ALEXVER/bin:/opt/happy/$HAPPYVER/bin:$PATH
 
 install:
  - cabal --version
