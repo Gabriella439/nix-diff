@@ -8,6 +8,7 @@ module Main where
 import Control.Monad (forM, forM_)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader (MonadReader, ReaderT, ask, local)
+import Control.Monad.State (MonadState, StateT, get, put)
 import Data.Attoparsec.Text (IResult(..))
 import Data.Map (Map)
 import Data.Monoid ((<>))
@@ -21,6 +22,7 @@ import Options.Generic (Generic, ParseRecord)
 import Prelude hiding (FilePath)
 
 import qualified Control.Monad.Reader
+import qualified Control.Monad.State
 import qualified Data.Algorithm.Diff
 import qualified Data.Attoparsec.Text
 import qualified Data.Map
@@ -44,8 +46,24 @@ data Context = Context
     , indent :: Natural
     }
 
-newtype Diff a = Diff { unDiff :: ReaderT Context IO a }
-    deriving (Functor, Applicative, Monad, MonadReader Context, MonadIO)
+newtype Status = Status { visited :: Set Diffed }
+
+data Diffed = Diffed
+    { leftDerivation  :: FilePath
+    , leftOutput      :: Set Text
+    , rightDerivation :: FilePath
+    , rightOutput     :: Set Text
+    } deriving (Eq, Ord)
+
+newtype Diff a = Diff { unDiff :: ReaderT Context (StateT Status IO) a }
+    deriving
+    ( Functor
+    , Applicative
+    , Monad
+    , MonadReader Context
+    , MonadState Status
+    , MonadIO
+    )
 
 echo :: Text -> Diff ()
 echo text = do
@@ -350,9 +368,15 @@ diffArgs leftArgs rightArgs = do
 
 diff :: FilePath -> Set Text -> FilePath -> Set Text -> Diff ()
 diff leftPath leftOutputs rightPath rightOutputs = do
+    Status { visited } <- get
+    let diffed = Diffed leftPath leftOutputs rightPath rightOutputs
     if leftPath == rightPath
     then return ()
+    else if Data.Set.member diffed visited
+    then do
+        echo (explain "These two derivations have already been compared")
     else do
+        put (Status (Data.Set.insert diffed visited))
         diffWith (leftPath, leftOutputs) (rightPath, rightOutputs) $ \(sign, (path, outputs)) -> do
             echo (sign (pathToText path <> renderOutputs outputs))
 
@@ -440,5 +464,6 @@ main = do
     let tty = if b then IsTTY else NotTTY
     let indent = 0
     let context = Context { tty, indent }
+    let status = Status Data.Set.empty
     let action = diff left (Data.Set.singleton "out") right (Data.Set.singleton "out")
-    Control.Monad.Reader.runReaderT (unDiff action) context
+    Control.Monad.State.evalStateT (Control.Monad.Reader.runReaderT (unDiff action) context) status
