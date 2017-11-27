@@ -12,6 +12,7 @@ maintainer:          Gabriel439@gmail.com
 copyright:           2017 Gabriel Gonzalez
 category:            System
 build-type:          Simple
+tested-with:         GHC == 8.0.2, GHC == 8.2.2
 cabal-version:       >= 1.10
 
 executable nix-diff
