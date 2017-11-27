@@ -1,6 +1,6 @@
 { mkDerivation, attoparsec, base, containers, Diff, mtl
 , nix-derivation, optparse-generic, stdenv, system-filepath, text
-, unix
+, unix, vector
 }:
 mkDerivation {
   pname = "nix-diff";
@@ -10,7 +10,7 @@ mkDerivation {
   isExecutable = true;
   executableHaskellDepends = [
     attoparsec base containers Diff mtl nix-derivation optparse-generic
-    system-filepath text unix
+    system-filepath text unix vector
   ];
   homepage = "https://github.com/Gabriel439/nix-diff";
   description = "Explain why two Nix derivations differ";

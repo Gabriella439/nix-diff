@@ -13,6 +13,7 @@ import Data.Map (Map)
 import Data.Monoid ((<>))
 import Data.Set (Set)
 import Data.Text (Text)
+import Data.Vector (Vector)
 import Filesystem.Path (FilePath)
 import Nix.Derivation (Derivation, DerivationOutput)
 import Numeric.Natural (Natural)
@@ -26,6 +27,7 @@ import qualified Data.Map
 import qualified Data.Set
 import qualified Data.Text
 import qualified Data.Text.IO
+import qualified Data.Vector
 import qualified Filesystem.Path.CurrentOS
 import qualified Nix.Derivation
 import qualified Options.Generic
@@ -265,9 +267,18 @@ diffEnv leftOutputs rightOutputs leftEnv rightEnv = do
 
     let bothEnv = innerJoin leftEnv rightEnv
 
+    let predicate key (left, right) =
+                left == right
+            ||  (   Data.Set.member key leftOutputs
+                &&  Data.Set.member key rightOutputs
+                )
+            ||  key == "builder"
+            ||  key == "system"
+
     if     Data.Map.null leftExtraEnv
         && Data.Map.null rightExtraEnv
-        && all (\(left, right) -> left == right) bothEnv
+        && Data.Map.null
+               (Data.Map.filterWithKey (\k v -> not (predicate k v)) bothEnv)
     then return ()
     else do
         echo (explain "The environments do not match:")
@@ -275,10 +286,7 @@ diffEnv leftOutputs rightOutputs leftEnv rightEnv = do
             forM_ (Data.Map.toList extraEnv) $ \(key, value) -> do
                 echo ("    " <> sign (key <> "=" <> value))
         forM_ (Data.Map.toList bothEnv) $ \(key, (leftValue, rightValue)) -> do
-            if      leftValue == rightValue
-                ||  (   Data.Set.member key leftOutputs
-                    &&  Data.Set.member key rightOutputs
-                    )
+            if      predicate key (leftValue, rightValue)
             then return ()
             else do
                 text <- indented 4 (diffText leftValue rightValue)
@@ -313,6 +321,33 @@ diffPlatform leftPlatform rightPlatform = do
         diffWith leftPlatform rightPlatform $ \(sign, platform) -> do
             echo ("    " <> sign platform)
 
+diffBuilder :: Text -> Text -> Diff ()
+diffBuilder leftBuilder rightBuilder = do
+    if leftBuilder == rightBuilder
+    then return ()
+    else do
+        echo (explain "The builders do not match")
+        diffWith leftBuilder rightBuilder $ \(sign, builder) -> do
+            echo ("    " <> sign builder)
+
+diffArgs :: Vector Text -> Vector Text -> Diff ()
+diffArgs leftArgs rightArgs = do
+    Context { tty } <- ask
+    if leftArgs == rightArgs
+    then return ()
+    else do
+        echo (explain "The arguments do not match")
+        let leftList  = Data.Vector.toList leftArgs
+        let rightList = Data.Vector.toList rightArgs
+        let diffs = Data.Algorithm.Diff.getDiff leftList rightList
+        let renderDiff (Data.Algorithm.Diff.First arg) =
+                echo ("    " <> minus tty arg)
+            renderDiff (Data.Algorithm.Diff.Second arg) =
+                echo ("    " <> plus tty arg)
+            renderDiff (Data.Algorithm.Diff.Both arg _) =
+                echo ("    " <> explain arg)
+        mapM_ renderDiff diffs
+
 diff :: FilePath -> Set Text -> FilePath -> Set Text -> Diff ()
 diff leftPath leftOutputs rightPath rightOutputs = do
     if leftPath == rightPath
@@ -338,6 +373,14 @@ diff leftPath leftOutputs rightPath rightOutputs = do
             let leftPlatform  = Nix.Derivation.platform leftDerivation
             let rightPlatform = Nix.Derivation.platform rightDerivation
             diffPlatform leftPlatform rightPlatform
+
+            let leftBuilder  = Nix.Derivation.builder leftDerivation
+            let rightBuilder = Nix.Derivation.builder rightDerivation
+            diffBuilder leftBuilder rightBuilder
+
+            let leftArgs  = Nix.Derivation.args leftDerivation
+            let rightArgs = Nix.Derivation.args rightDerivation
+            diffArgs leftArgs rightArgs
 
             let leftInputs  = groupByName (Nix.Derivation.inputDrvs leftDerivation)
             let rightInputs = groupByName (Nix.Derivation.inputDrvs rightDerivation)
