@@ -392,70 +392,73 @@ diff leftPath leftOutputs rightPath rightOutputs = do
 
             let leftOuts = Nix.Derivation.outputs leftDerivation
             let rightOuts = Nix.Derivation.outputs rightDerivation
-            diffOutputs leftOuts rightOuts
+            if leftOuts == rightOuts
+            then echo (explain "The derivations produce the same output")
+            else do
+                diffOutputs leftOuts rightOuts
 
-            let leftPlatform  = Nix.Derivation.platform leftDerivation
-            let rightPlatform = Nix.Derivation.platform rightDerivation
-            diffPlatform leftPlatform rightPlatform
+                let leftPlatform  = Nix.Derivation.platform leftDerivation
+                let rightPlatform = Nix.Derivation.platform rightDerivation
+                diffPlatform leftPlatform rightPlatform
 
-            let leftBuilder  = Nix.Derivation.builder leftDerivation
-            let rightBuilder = Nix.Derivation.builder rightDerivation
-            diffBuilder leftBuilder rightBuilder
+                let leftBuilder  = Nix.Derivation.builder leftDerivation
+                let rightBuilder = Nix.Derivation.builder rightDerivation
+                diffBuilder leftBuilder rightBuilder
 
-            let leftArgs  = Nix.Derivation.args leftDerivation
-            let rightArgs = Nix.Derivation.args rightDerivation
-            diffArgs leftArgs rightArgs
+                let leftArgs  = Nix.Derivation.args leftDerivation
+                let rightArgs = Nix.Derivation.args rightDerivation
+                diffArgs leftArgs rightArgs
 
-            let leftInputs  = groupByName (Nix.Derivation.inputDrvs leftDerivation)
-            let rightInputs = groupByName (Nix.Derivation.inputDrvs rightDerivation)
+                let leftInputs  = groupByName (Nix.Derivation.inputDrvs leftDerivation)
+                let rightInputs = groupByName (Nix.Derivation.inputDrvs rightDerivation)
     
-            let leftNames  = Data.Map.keysSet leftInputs
-            let rightNames = Data.Map.keysSet rightInputs
-            let leftExtraNames  = Data.Set.difference leftNames  rightNames
-            let rightExtraNames = Data.Set.difference rightNames leftNames
+                let leftNames  = Data.Map.keysSet leftInputs
+                let rightNames = Data.Map.keysSet rightInputs
+                let leftExtraNames  = Data.Set.difference leftNames  rightNames
+                let rightExtraNames = Data.Set.difference rightNames leftNames
 
-            if leftNames /= rightNames
-            then do
-                echo (explain "The set of input names do not match:")
-                diffWith leftExtraNames rightExtraNames $ \(sign, names) -> do
-                    forM_ names $ \name -> do
-                        echo ("    " <> sign name)
-            else do 
-                let assocs = Data.Map.toList (innerJoin leftInputs rightInputs)
-                descended <- forM assocs $ \(inputName, (leftPaths, rightPaths)) -> do
-                    let leftExtraPaths =
-                            Data.Map.difference leftPaths  rightPaths
-                    let rightExtraPaths =
-                            Data.Map.difference rightPaths leftPaths
-                    case (Data.Map.toList leftExtraPaths, Data.Map.toList rightExtraPaths) of
-                        _   | leftPaths == rightPaths -> do
-                            return False
-                        ([(leftPath', leftOutputs')], [(rightPath', rightOutputs')])
-                            | leftOutputs' == rightOutputs' -> do
-                            echo (explain ("The input named `" <> inputName <> "` differs"))
-                            indented 2 (diff leftPath' leftOutputs' rightPath' rightOutputs')
-                            return True
-                        _ -> do
-                            echo (explain ("The set of inputs named `" <> inputName <> "` do not match"))
-                            diffWith leftExtraPaths rightExtraPaths $ \(sign, extraPaths) -> do
-                                forM_ (Data.Map.toList extraPaths) $ \(extraPath, outputs) -> do
-                                    echo ("    " <> sign (pathToText extraPath <> renderOutputs outputs))
-                            return False
-                if or descended
-                then return ()
-                else do
-                    let leftSrcs  = Nix.Derivation.inputSrcs leftDerivation
-                    let rightSrcs = Nix.Derivation.inputSrcs rightDerivation
-                    differed <- diffSrcs leftSrcs rightSrcs
-
-                    if not differed
+                if leftNames /= rightNames
+                then do
+                    echo (explain "The set of input names do not match:")
+                    diffWith leftExtraNames rightExtraNames $ \(sign, names) -> do
+                        forM_ names $ \name -> do
+                            echo ("    " <> sign name)
+                else do 
+                    let assocs = Data.Map.toList (innerJoin leftInputs rightInputs)
+                    descended <- forM assocs $ \(inputName, (leftPaths, rightPaths)) -> do
+                        let leftExtraPaths =
+                                Data.Map.difference leftPaths  rightPaths
+                        let rightExtraPaths =
+                                Data.Map.difference rightPaths leftPaths
+                        case (Data.Map.toList leftExtraPaths, Data.Map.toList rightExtraPaths) of
+                            _   | leftPaths == rightPaths -> do
+                                return False
+                            ([(leftPath', leftOutputs')], [(rightPath', rightOutputs')])
+                                | leftOutputs' == rightOutputs' -> do
+                                echo (explain ("The input named `" <> inputName <> "` differs"))
+                                indented 2 (diff leftPath' leftOutputs' rightPath' rightOutputs')
+                                return True
+                            _ -> do
+                                echo (explain ("The set of inputs named `" <> inputName <> "` do not match"))
+                                diffWith leftExtraPaths rightExtraPaths $ \(sign, extraPaths) -> do
+                                    forM_ (Data.Map.toList extraPaths) $ \(extraPath, outputs) -> do
+                                        echo ("    " <> sign (pathToText extraPath <> renderOutputs outputs))
+                                return False
+                    if or descended
                     then return ()
                     else do
-                        let leftEnv  = Nix.Derivation.env leftDerivation
-                        let rightEnv = Nix.Derivation.env rightDerivation
-                        let leftOutNames  = Data.Map.keysSet leftOuts
-                        let rightOutNames = Data.Map.keysSet rightOuts
-                        diffEnv leftOutNames rightOutNames leftEnv rightEnv
+                        let leftSrcs  = Nix.Derivation.inputSrcs leftDerivation
+                        let rightSrcs = Nix.Derivation.inputSrcs rightDerivation
+                        differed <- diffSrcs leftSrcs rightSrcs
+
+                        if not differed
+                        then return ()
+                        else do
+                            let leftEnv  = Nix.Derivation.env leftDerivation
+                            let rightEnv = Nix.Derivation.env rightDerivation
+                            let leftOutNames  = Data.Map.keysSet leftOuts
+                            let rightOutNames = Data.Map.keysSet rightOuts
+                            diffEnv leftOutNames rightOutNames leftEnv rightEnv
 
 main :: IO ()
 main = do
