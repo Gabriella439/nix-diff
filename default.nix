@@ -4,7 +4,7 @@
 }:
 mkDerivation {
   pname = "nix-diff";
-  version = "1.0.1";
+  version = "1.0.2";
   src = ./.;
   isLibrary = false;
   isExecutable = true;
