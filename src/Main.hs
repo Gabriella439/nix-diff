@@ -366,8 +366,8 @@ diffArgs leftArgs rightArgs = do
                 echo ("    " <> explain arg)
         mapM_ renderDiff diffs
 
-diff :: FilePath -> Set Text -> FilePath -> Set Text -> Diff ()
-diff leftPath leftOutputs rightPath rightOutputs = do
+diff :: Bool -> FilePath -> Set Text -> FilePath -> Set Text -> Diff ()
+diff topLevel leftPath leftOutputs rightPath rightOutputs = do
     Status { visited } <- get
     let diffed = Diffed leftPath leftOutputs rightPath rightOutputs
     if leftPath == rightPath
@@ -380,7 +380,7 @@ diff leftPath leftOutputs rightPath rightOutputs = do
         diffWith (leftPath, leftOutputs) (rightPath, rightOutputs) $ \(sign, (path, outputs)) -> do
             echo (sign (pathToText path <> renderOutputs outputs))
 
-        if derivationName leftPath /= derivationName rightPath
+        if derivationName leftPath /= derivationName rightPath && not topLevel
         then do
             echo (explain "The derivation names do not match")
         else if leftOutputs /= rightOutputs
@@ -432,7 +432,7 @@ diff leftPath leftOutputs rightPath rightOutputs = do
                     ([(leftPath', leftOutputs')], [(rightPath', rightOutputs')])
                         | leftOutputs' == rightOutputs' -> do
                         echo (explain ("The input named `" <> inputName <> "` differs"))
-                        indented 2 (diff leftPath' leftOutputs' rightPath' rightOutputs')
+                        indented 2 (diff False leftPath' leftOutputs' rightPath' rightOutputs')
                         return True
                     _ -> do
                         echo (explain ("The set of inputs named `" <> inputName <> "` do not match"))
@@ -464,5 +464,5 @@ main = do
     let indent = 0
     let context = Context { tty, indent }
     let status = Status Data.Set.empty
-    let action = diff left (Data.Set.singleton "out") right (Data.Set.singleton "out")
+    let action = diff True left (Data.Set.singleton "out") right (Data.Set.singleton "out")
     Control.Monad.State.evalStateT (Control.Monad.Reader.runReaderT (unDiff action) context) status
