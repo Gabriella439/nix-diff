@@ -5,7 +5,7 @@
 
 module Main where
 
-import Control.Applicative (optional, (<|>))
+import Control.Applicative ((<|>))
 import Control.Monad (forM, forM_)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader (MonadReader, ReaderT, ask, local)
@@ -37,21 +37,32 @@ import qualified Options.Applicative
 import qualified System.Posix.IO
 import qualified System.Posix.Terminal
 
-data Color = NoColor | Color
+data Color = Always | Auto | Never
 
 parseColor :: Parser Color
 parseColor =
-        Options.Applicative.flag' NoColor (Options.Applicative.long "no-color")
-    <|> Options.Applicative.flag' Color   (Options.Applicative.long "color"   )
+    Options.Applicative.option
+        reader
+        (   Options.Applicative.long "color"
+        <>  Options.Applicative.value Auto
+        <>  Options.Applicative.metavar "(always|auto|never)"
+        )
+  where
+    reader = do
+        string <- Options.Applicative.str
+        case string of
+            "always" -> return Always
+            "auto"   -> return Auto
+            "never"  -> return Never
+            _        -> fail "Invalid color"
 
-data Options =
-    Options { left :: FilePath, right :: FilePath, color :: Maybe Color }
+data Options = Options { left :: FilePath, right :: FilePath, color :: Color }
 
 parseOptions :: Parser Options
 parseOptions = do
     left  <- parseLeft
     right <- parseRight
-    color <- optional parseColor
+    color <- parseColor
 
     return (Options { left, right, color })
   where
@@ -491,11 +502,11 @@ main = do
     Options { left, right, color } <- Options.Applicative.execParser parserInfo
 
     tty <- case color of
-        Just NoColor -> do
+        Never -> do
             return NotTTY
-        Just Color -> do
+        Always -> do
             return IsTTY
-        _ -> do
+        Auto -> do
             b <- System.Posix.Terminal.queryTerminal System.Posix.IO.stdOutput
             return (if b then IsTTY else NotTTY)
 
