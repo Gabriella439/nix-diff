@@ -1,10 +1,11 @@
-{-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE ApplicativeDo              #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE NamedFieldPuns             #-}
 {-# LANGUAGE OverloadedStrings          #-}
 
 module Main where
 
+import Control.Applicative ((<|>))
 import Control.Monad (forM, forM_)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader (MonadReader, ReaderT, ask, local)
@@ -18,7 +19,7 @@ import Data.Vector (Vector)
 import Filesystem.Path (FilePath)
 import Nix.Derivation (Derivation, DerivationOutput)
 import Numeric.Natural (Natural)
-import Options.Generic (Generic, ParseRecord)
+import Options.Applicative (Parser, ParserInfo)
 import Prelude hiding (FilePath)
 
 import qualified Control.Monad.Reader
@@ -32,14 +33,54 @@ import qualified Data.Text.IO
 import qualified Data.Vector
 import qualified Filesystem.Path.CurrentOS
 import qualified Nix.Derivation
-import qualified Options.Generic
+import qualified Options.Applicative
 import qualified System.Posix.IO
 import qualified System.Posix.Terminal
 
-data Options = Options FilePath FilePath
-    deriving (Generic)
+data Color = Always | Auto | Never
 
-instance ParseRecord Options
+parseColor :: Parser Color
+parseColor =
+    Options.Applicative.option
+        reader
+        (   Options.Applicative.long "color"
+        <>  Options.Applicative.value Auto
+        <>  Options.Applicative.metavar "(always|auto|never)"
+        )
+  where
+    reader = do
+        string <- Options.Applicative.str
+        case string of
+            "always" -> return Always
+            "auto"   -> return Auto
+            "never"  -> return Never
+            _        -> fail "Invalid color"
+
+data Options = Options { left :: FilePath, right :: FilePath, color :: Color }
+
+parseOptions :: Parser Options
+parseOptions = do
+    left  <- parseLeft
+    right <- parseRight
+    color <- parseColor
+
+    return (Options { left, right, color })
+  where
+    parseFilePath metavar = do
+        Options.Applicative.strArgument
+            (Options.Applicative.metavar metavar)
+
+    parseLeft = parseFilePath "LEFT"
+
+    parseRight = parseFilePath "RIGHT"
+
+parserInfo :: ParserInfo Options
+parserInfo =
+    Options.Applicative.info
+        parseOptions
+        (   Options.Applicative.fullDesc
+        <>  Options.Applicative.header "Explain why two derivations differ"
+        )
 
 data Context = Context
     { tty    :: TTY
@@ -458,9 +499,17 @@ diff topLevel leftPath leftOutputs rightPath rightOutputs = do
 
 main :: IO ()
 main = do
-    Options left right <- Options.Generic.getRecord "Explain why two derivations differ"
-    b <- System.Posix.Terminal.queryTerminal System.Posix.IO.stdOutput
-    let tty = if b then IsTTY else NotTTY
+    Options { left, right, color } <- Options.Applicative.execParser parserInfo
+
+    tty <- case color of
+        Never -> do
+            return NotTTY
+        Always -> do
+            return IsTTY
+        Auto -> do
+            b <- System.Posix.Terminal.queryTerminal System.Posix.IO.stdOutput
+            return (if b then IsTTY else NotTTY)
+
     let indent = 0
     let context = Context { tty, indent }
     let status = Status Data.Set.empty
