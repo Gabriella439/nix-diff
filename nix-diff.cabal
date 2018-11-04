@@ -1,5 +1,5 @@
 name:                nix-diff
-version:             1.0.4
+version:             1.0.5
 synopsis:            Explain why two Nix derivations differ
 description:         This package provides a @nix-diff@ executable which
                      explains why two Nix derivations (i.e. @*.drv@ files)

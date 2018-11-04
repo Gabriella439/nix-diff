@@ -1,4 +1,4 @@
-# `nix-diff 1.0.4`
+# `nix-diff 1.0.5`
 
 This package provides a `nix-diff` executable which explains why two Nix
 derivations differ.  The most common use cases for this are:
