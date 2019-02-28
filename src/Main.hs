@@ -32,6 +32,7 @@ import qualified Data.Text
 import qualified Data.Text.IO
 import qualified Data.Vector
 import qualified Filesystem.Path.CurrentOS
+import qualified GHC.IO.Encoding
 import qualified Nix.Derivation
 import qualified Options.Applicative
 import qualified System.Posix.IO
@@ -499,6 +500,8 @@ diff topLevel leftPath leftOutputs rightPath rightOutputs = do
 
 main :: IO ()
 main = do
+    GHC.IO.Encoding.setLocaleEncoding GHC.IO.Encoding.utf8
+
     Options { left, right, color } <- Options.Applicative.execParser parserInfo
 
     tty <- case color of
