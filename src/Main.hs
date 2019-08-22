@@ -1,4 +1,5 @@
 {-# LANGUAGE ApplicativeDo              #-}
+{-# LANGUAGE DuplicateRecordFields      #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE NamedFieldPuns             #-}
 {-# LANGUAGE OverloadedStrings          #-}
@@ -24,7 +25,7 @@ import Prelude hiding (FilePath)
 
 import qualified Control.Monad.Reader
 import qualified Control.Monad.State
-import qualified Data.Algorithm.Diff
+import qualified Data.Algorithm.Diff       as Diff
 import qualified Data.Attoparsec.Text
 import qualified Data.Map
 import qualified Data.Set
@@ -57,15 +58,28 @@ parseColor =
             "never"  -> return Never
             _        -> fail "Invalid color"
 
-data Options = Options { left :: FilePath, right :: FilePath, color :: Color }
+parseLineOriented :: Parser Bool
+parseLineOriented =
+    Options.Applicative.switch
+        (   Options.Applicative.long "line-oriented"
+        <>  Options.Applicative.help "Display textual differences on a per-line basis instead of a per-character basis"
+        )
+
+data Options = Options
+    { left         :: FilePath
+    , right        :: FilePath
+    , color        :: Color
+    , lineOriented :: Bool
+    }
 
 parseOptions :: Parser Options
 parseOptions = do
-    left  <- parseLeft
-    right <- parseRight
-    color <- parseColor
+    left         <- parseLeft
+    right        <- parseRight
+    color        <- parseColor
+    lineOriented <- parseLineOriented
 
-    return (Options { left, right, color })
+    return (Options { left, right, color, lineOriented })
   where
     parseFilePath metavar = do
         Options.Applicative.strArgument
@@ -84,8 +98,9 @@ parserInfo =
         )
 
 data Context = Context
-    { tty    :: TTY
-    , indent :: Natural
+    { tty          :: TTY
+    , indent       :: Natural
+    , lineOriented :: Bool
     }
 
 newtype Status = Status { visited :: Set Diffed }
@@ -180,9 +195,11 @@ red  IsTTY text = "\ESC[1;31m" <> text <> "\ESC[0m"
 red NotTTY text = text
 
 -- | Color text background red
-redBackground  :: TTY -> Text -> Text
-redBackground  IsTTY text = "\ESC[41m" <> text <> "\ESC[0m"
-redBackground NotTTY text = "←" <> text <> "←"
+redBackground  :: Bool -> TTY -> Text -> Text
+redBackground False IsTTY  text = "\ESC[41m" <> text <> "\ESC[0m"
+redBackground True  IsTTY  text = "\ESC[41m" <> text <> "\ESC[0m\n"
+redBackground False NotTTY text = "←" <> text <> "←"
+redBackground True  NotTTY text = "- " <> text <> "\n"
 
 -- | Color text green
 green :: TTY -> Text -> Text
@@ -190,14 +207,18 @@ green  IsTTY text = "\ESC[1;32m" <> text <> "\ESC[0m"
 green NotTTY text = text
 
 -- | Color text background green
-greenBackground :: TTY -> Text -> Text
-greenBackground  IsTTY text = "\ESC[42m" <> text <> "\ESC[0m"
-greenBackground NotTTY text = "→" <> text <> "→"
+greenBackground :: Bool -> TTY -> Text -> Text
+greenBackground False IsTTY  text = "\ESC[42m" <> text <> "\ESC[0m"
+greenBackground True  IsTTY  text = "\ESC[42m" <> text <> "\ESC[0m\n"
+greenBackground False NotTTY text = "→" <> text <> "→"
+greenBackground True  NotTTY text = "+ " <> text <> "\n"
 
 -- | Color text grey
-grey :: TTY -> Text -> Text
-grey  IsTTY text = "\ESC[1;2m" <> text <> "\ESC[0m"
-grey NotTTY text = text
+grey :: Bool -> TTY -> Text -> Text
+grey False  IsTTY text = "\ESC[1;2m" <> text <> "\ESC[0m"
+grey True   IsTTY text = "\ESC[1;2m" <> text <> "\ESC[0m\n"
+grey False NotTTY text = text
+grey True  NotTTY text = "  " <> text <> "\n"
 
 -- | Format the left half of a diff
 minus :: TTY -> Text -> Text
@@ -273,6 +294,11 @@ diffOutputs leftOutputs rightOutputs = do
         then return ()
         else diffOutput key leftOutput rightOutput
 
+mapDiff :: (a -> b) -> Diff.Diff a -> Diff.Diff b
+mapDiff f (Diff.First  l) = Diff.First (f l)
+mapDiff f (Diff.Second r) = Diff.Second (f r)
+mapDiff f (Diff.Both l r) = Diff.Both (f l) (f r)
+
 -- | Diff two `Text` values
 diffText
     :: Text
@@ -281,13 +307,21 @@ diffText
     -- ^ Right value to compare
     -> Diff Text
 diffText left right = do
-    Context { indent, tty } <- ask
+    Context { indent, lineOriented, tty } <- ask
     let n = fromIntegral indent
 
     let leftString  = Data.Text.unpack left
-        rightString = Data.Text.unpack right
+    let rightString = Data.Text.unpack right
 
-    let chunks = Data.Algorithm.Diff.getGroupedDiff leftString rightString
+    let leftLines  = Data.Text.lines left
+    let rightLines = Data.Text.lines right
+
+    let chunks =
+            if lineOriented
+                then
+                    Diff.getDiff leftLines rightLines
+                else
+                    fmap (mapDiff Data.Text.pack) (Diff.getGroupedDiff leftString rightString)
 
     let prefix = Data.Text.replicate n " "
 
@@ -301,12 +335,12 @@ diffText left right = do
               where
                 indentLine line = prefix <> "    " <> line
 
-    let renderChunk (Data.Algorithm.Diff.First  l) =
-            redBackground   tty (Data.Text.pack l)
-        renderChunk (Data.Algorithm.Diff.Second r) =
-            greenBackground tty (Data.Text.pack r)
-        renderChunk (Data.Algorithm.Diff.Both l _) =
-            grey            tty (Data.Text.pack l)
+    let renderChunk (Diff.First  l) =
+            redBackground   lineOriented tty l
+        renderChunk (Diff.Second r) =
+            greenBackground lineOriented tty r
+        renderChunk (Diff.Both l _) =
+            grey            lineOriented tty l
 
     return (format (Data.Text.concat (fmap renderChunk chunks)))
 
@@ -399,12 +433,12 @@ diffArgs leftArgs rightArgs = do
         echo (explain "The arguments do not match")
         let leftList  = Data.Vector.toList leftArgs
         let rightList = Data.Vector.toList rightArgs
-        let diffs = Data.Algorithm.Diff.getDiff leftList rightList
-        let renderDiff (Data.Algorithm.Diff.First arg) =
+        let diffs = Diff.getDiff leftList rightList
+        let renderDiff (Diff.First arg) =
                 echo ("    " <> minus tty arg)
-            renderDiff (Data.Algorithm.Diff.Second arg) =
+            renderDiff (Diff.Second arg) =
                 echo ("    " <> plus tty arg)
-            renderDiff (Data.Algorithm.Diff.Both arg _) =
+            renderDiff (Diff.Both arg _) =
                 echo ("    " <> explain arg)
         mapM_ renderDiff diffs
 
@@ -502,7 +536,7 @@ main :: IO ()
 main = do
     GHC.IO.Encoding.setLocaleEncoding GHC.IO.Encoding.utf8
 
-    Options { left, right, color } <- Options.Applicative.execParser parserInfo
+    Options { left, right, color, lineOriented } <- Options.Applicative.execParser parserInfo
 
     tty <- case color of
         Never -> do
@@ -514,7 +548,7 @@ main = do
             return (if b then IsTTY else NotTTY)
 
     let indent = 0
-    let context = Context { tty, indent }
+    let context = Context { tty, indent, lineOriented }
     let status = Status Data.Set.empty
     let action = diff True left (Data.Set.singleton "out") right (Data.Set.singleton "out")
     Control.Monad.State.evalStateT (Control.Monad.Reader.runReaderT (unDiff action) context) status
