@@ -65,11 +65,19 @@ parseLineOriented =
         <>  Options.Applicative.help "Display textual differences on a per-line basis instead of a per-character basis"
         )
 
+parseEnvironment :: Parser Bool
+parseEnvironment =
+    Options.Applicative.switch
+        (   Options.Applicative.long "environment"
+        <>  Options.Applicative.help "Force display of environment differences"
+        )
+
 data Options = Options
     { left         :: FilePath
     , right        :: FilePath
     , color        :: Color
     , lineOriented :: Bool
+    , environment  :: Bool
     }
 
 parseOptions :: Parser Options
@@ -78,8 +86,9 @@ parseOptions = do
     right        <- parseRight
     color        <- parseColor
     lineOriented <- parseLineOriented
+    environment  <- parseEnvironment
 
-    return (Options { left, right, color, lineOriented })
+    return (Options { left, right, color, lineOriented, environment })
   where
     parseFilePath metavar = do
         Options.Applicative.strArgument
@@ -101,6 +110,7 @@ data Context = Context
     { tty          :: TTY
     , indent       :: Natural
     , lineOriented :: Bool
+    , environment  :: Bool
     }
 
 newtype Status = Status { visited :: Set Diffed }
@@ -386,25 +396,24 @@ diffEnv leftOutputs rightOutputs leftEnv rightEnv = do
                 text <- indented 4 (diffText leftValue rightValue)
                 echo ("    " <> key <> "=" <> text)
 
--- | Diff two environments
+-- | Diff input sources
 diffSrcs
     :: Set FilePath
-    -- ^ Left derivation outputs
+    -- ^ Left input sources
     -> Set FilePath
-    -- ^ Right derivation outputs
-    -> Diff Bool
+    -- ^ Right inputSources
+    -> Diff ()
 diffSrcs leftSrcs rightSrcs = do
     let leftExtraSrcs  = Data.Set.difference leftSrcs  rightSrcs
     let rightExtraSrcs = Data.Set.difference rightSrcs leftSrcs
 
     if Data.Set.null leftExtraSrcs && Data.Set.null rightExtraSrcs
-        then return True
+        then return ()
         else do
             echo (explain "The set of input sources do not match:")
             diffWith leftExtraSrcs rightExtraSrcs $ \(sign, extraSrcs) -> do
                 forM_ extraSrcs $ \extraSrc -> do
                     echo ("    " <> sign (pathToText extraSrc))
-            return False
 
 diffPlatform :: Text -> Text -> Diff ()
 diffPlatform leftPlatform rightPlatform = do
@@ -482,6 +491,10 @@ diff topLevel leftPath leftOutputs rightPath rightOutputs = do
             let rightArgs = Nix.Derivation.args rightDerivation
             diffArgs leftArgs rightArgs
 
+            let leftSrcs  = Nix.Derivation.inputSrcs leftDerivation
+            let rightSrcs = Nix.Derivation.inputSrcs rightDerivation
+            diffSrcs leftSrcs rightSrcs
+
             let leftInputs  = groupByName (Nix.Derivation.inputDrvs leftDerivation)
             let rightInputs = groupByName (Nix.Derivation.inputDrvs rightDerivation)
 
@@ -516,27 +529,24 @@ diff topLevel leftPath leftOutputs rightPath rightOutputs = do
                             forM_ (Data.Map.toList extraPaths) $ \(extraPath, outputs) -> do
                                 echo ("    " <> sign (pathToText extraPath <> renderOutputs outputs))
                         return False
-            if or descended
-            then return ()
-            else do
-                let leftSrcs  = Nix.Derivation.inputSrcs leftDerivation
-                let rightSrcs = Nix.Derivation.inputSrcs rightDerivation
-                differed <- diffSrcs leftSrcs rightSrcs
 
-                if not differed
-                then return ()
-                else do
-                    let leftEnv  = Nix.Derivation.env leftDerivation
-                    let rightEnv = Nix.Derivation.env rightDerivation
-                    let leftOutNames  = Data.Map.keysSet leftOuts
-                    let rightOutNames = Data.Map.keysSet rightOuts
-                    diffEnv leftOutNames rightOutNames leftEnv rightEnv
+            Context { environment } <- ask
+
+            if or descended && not environment
+            then do
+                echo (explain "Skipping environment comparison")
+            else do
+                let leftEnv  = Nix.Derivation.env leftDerivation
+                let rightEnv = Nix.Derivation.env rightDerivation
+                let leftOutNames  = Data.Map.keysSet leftOuts
+                let rightOutNames = Data.Map.keysSet rightOuts
+                diffEnv leftOutNames rightOutNames leftEnv rightEnv
 
 main :: IO ()
 main = do
     GHC.IO.Encoding.setLocaleEncoding GHC.IO.Encoding.utf8
 
-    Options { left, right, color, lineOriented } <- Options.Applicative.execParser parserInfo
+    Options { left, right, color, lineOriented, environment } <- Options.Applicative.execParser parserInfo
 
     tty <- case color of
         Never -> do
@@ -548,7 +558,7 @@ main = do
             return (if b then IsTTY else NotTTY)
 
     let indent = 0
-    let context = Context { tty, indent, lineOriented }
+    let context = Context { tty, indent, lineOriented, environment }
     let status = Status Data.Set.empty
     let action = diff True left (Data.Set.singleton "out") right (Data.Set.singleton "out")
     Control.Monad.State.evalStateT (Control.Monad.Reader.runReaderT (unDiff action) context) status
