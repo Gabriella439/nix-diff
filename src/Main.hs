@@ -3,6 +3,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE NamedFieldPuns             #-}
 {-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE CPP                        #-}
 
 module Main where
 
@@ -130,6 +131,9 @@ newtype Diff a = Diff { unDiff :: ReaderT Context (StateT Status IO) a }
     , MonadReader Context
     , MonadState Status
     , MonadIO
+#if MIN_VERSION_base(4,9,0)
+    , MonadFail
+#endif
     )
 
 echo :: Text -> Diff ()
