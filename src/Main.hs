@@ -40,6 +40,10 @@ import qualified Options.Applicative
 import qualified System.Posix.IO
 import qualified System.Posix.Terminal
 
+#if MIN_VERSION_base(4,9,0)
+import Control.Monad.Fail (MonadFail)
+#endif
+
 data Color = Always | Auto | Never
 
 parseColor :: Parser Color
