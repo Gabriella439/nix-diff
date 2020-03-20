@@ -3,6 +3,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE NamedFieldPuns             #-}
 {-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE CPP                        #-}
 
 module Main where
 
@@ -38,6 +39,10 @@ import qualified Nix.Derivation
 import qualified Options.Applicative
 import qualified System.Posix.IO
 import qualified System.Posix.Terminal
+
+#if MIN_VERSION_base(4,9,0)
+import Control.Monad.Fail (MonadFail)
+#endif
 
 data Color = Always | Auto | Never
 
@@ -130,6 +135,9 @@ newtype Diff a = Diff { unDiff :: ReaderT Context (StateT Status IO) a }
     , MonadReader Context
     , MonadState Status
     , MonadIO
+#if MIN_VERSION_base(4,9,0)
+    , MonadFail
+#endif
     )
 
 echo :: Text -> Diff ()
