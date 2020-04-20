@@ -1,18 +1,27 @@
-{ mkDerivation, attoparsec, base, containers, Diff, mtl
-, nix-derivation, optparse-applicative, stdenv, system-filepath
-, text, unix, vector
-}:
-mkDerivation {
-  pname = "nix-diff";
-  version = "1.0.9";
-  src = ./.;
-  isLibrary = false;
-  isExecutable = true;
-  executableHaskellDepends = [
-    attoparsec base containers Diff mtl nix-derivation
-    optparse-applicative system-filepath text unix vector
-  ];
-  homepage = "https://github.com/Gabriel439/nix-diff";
-  description = "Explain why two Nix derivations differ";
-  license = stdenv.lib.licenses.bsd3;
-}
+# You can build this repository using Nix by running:
+#
+#     $ nix-build
+#
+# You can also open up this repository inside of a Nix shell by running:
+#
+#     $ nix-shell
+#
+# ... and then Nix will supply the correct Haskell development environment for
+# you
+let
+  config = {
+    packageOverrides = pkgs: {
+      haskellPackages = pkgs.haskellPackages.override {
+        overrides = haskellPackagesNew: haskellPackagesOld: {
+          nix-diff = haskellPackagesNew.callCabal2nix "nix-diff" ./. { };
+        };
+      };
+    };
+  };
+
+  pkgs =
+    import <nixpkgs> { inherit config; };
+
+in
+  { nix-diff = pkgs.haskellPackages.nix-diff;
+  }
