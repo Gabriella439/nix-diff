@@ -18,11 +18,9 @@ import Data.Monoid ((<>))
 import Data.Set (Set)
 import Data.Text (Text)
 import Data.Vector (Vector)
-import Filesystem.Path (FilePath)
 import Nix.Derivation (Derivation, DerivationOutput)
 import Numeric.Natural (Natural)
 import Options.Applicative (Parser, ParserInfo)
-import Prelude hiding (FilePath)
 
 import qualified Control.Monad.Reader
 import qualified Control.Monad.State
@@ -33,7 +31,6 @@ import qualified Data.Set
 import qualified Data.Text
 import qualified Data.Text.IO
 import qualified Data.Vector
-import qualified Filesystem.Path.CurrentOS
 import qualified GHC.IO.Encoding
 import qualified Nix.Derivation
 import qualified Options.Applicative
@@ -152,10 +149,7 @@ indented n = local adapt
     adapt context = context { indent = indent context + n }
 
 pathToText :: FilePath -> Text
-pathToText path =
-    case Filesystem.Path.CurrentOS.toText path of
-        Left  text -> text
-        Right text -> text
+pathToText = Data.Text.pack
 
 {-| Extract the name of a derivation (i.e. the part after the hash)
 
@@ -183,9 +177,9 @@ groupByName m = Data.Map.fromList assocs
     assocs = fmap toAssoc (Data.Map.keys m)
 
 -- | Read and parse a derivation from a file
-readDerivation :: FilePath -> Diff Derivation
+readDerivation :: FilePath -> Diff (Derivation FilePath Text)
 readDerivation path = do
-    let string = Filesystem.Path.CurrentOS.encodeString path
+    let string = path
     text <- liftIO (Data.Text.IO.readFile string)
     case Data.Attoparsec.Text.parse Nix.Derivation.parseDerivation text of
         Done _ derivation -> do
@@ -268,9 +262,9 @@ renderOutputs outputs =
 diffOutput
     :: Text
     -- ^ Output name
-    -> DerivationOutput
+    -> (DerivationOutput FilePath Text)
     -- ^ Left derivation outputs
-    -> DerivationOutput
+    -> (DerivationOutput FilePath Text)
     -- ^ Right derivation outputs
     -> Diff ()
 diffOutput outputName leftOutput rightOutput = do
@@ -289,9 +283,9 @@ diffOutput outputName leftOutput rightOutput = do
 
 -- | Diff two sets of outputs
 diffOutputs
-    :: Map Text DerivationOutput
+    :: Map Text (DerivationOutput FilePath Text)
     -- ^ Left derivation outputs
-    -> Map Text DerivationOutput
+    -> Map Text (DerivationOutput FilePath Text)
     -- ^ Right derivation outputs
     -> Diff ()
 diffOutputs leftOutputs rightOutputs = do
