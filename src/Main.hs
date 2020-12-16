@@ -1,4 +1,5 @@
 {-# LANGUAGE ApplicativeDo              #-}
+{-# LANGUAGE BlockArguments             #-}
 {-# LANGUAGE DuplicateRecordFields      #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE NamedFieldPuns             #-}
@@ -22,9 +23,10 @@ import Nix.Derivation (Derivation, DerivationOutput)
 import Numeric.Natural (Natural)
 import Options.Applicative (Parser, ParserInfo)
 
+import qualified Control.Monad        as Monad
 import qualified Control.Monad.Reader
 import qualified Control.Monad.State
-import qualified Data.Algorithm.Diff       as Diff
+import qualified Data.Algorithm.Diff  as Diff
 import qualified Data.Attoparsec.Text
 import qualified Data.Map
 import qualified Data.Set
@@ -34,6 +36,7 @@ import qualified Data.Vector
 import qualified GHC.IO.Encoding
 import qualified Nix.Derivation
 import qualified Options.Applicative
+import qualified System.Directory     as Directory
 import qualified System.Posix.IO
 import qualified System.Posix.Terminal
 
@@ -166,8 +169,8 @@ pathToText = Data.Text.pack
 derivationName :: FilePath -> Text
 derivationName = Data.Text.dropEnd 4 . Data.Text.drop 44 . pathToText
 
--- | Group input derivations by their name
-groupByName :: Map FilePath (Set Text) -> Map Text (Map FilePath (Set Text))
+-- | Group paths by their name
+groupByName :: Map FilePath a -> Map Text (Map FilePath a)
 groupByName m = Data.Map.fromList assocs
   where
     toAssoc key = (derivationName key, Data.Map.filterWithKey predicate m)
@@ -175,6 +178,23 @@ groupByName m = Data.Map.fromList assocs
         predicate key' _ = derivationName key == derivationName key'
 
     assocs = fmap toAssoc (Data.Map.keys m)
+
+{-| Extract the name of a build product
+
+    Similar to `derivationName`, this assumes that the path name is:
+
+    > /nix/store/${32_CHARACTER_HASH}-${NAME}.drv
+-}
+buildProductName :: FilePath -> Text
+buildProductName = Data.Text.drop 44 . pathToText
+
+-- | Like `groupByName`, but for `Set`s
+groupSetsByName :: Set FilePath -> Map Text (Set FilePath)
+groupSetsByName s = Data.Map.fromList (fmap toAssoc (Data.Set.toList s))
+  where
+    toAssoc key = (buildProductName key, Data.Set.filter predicate s)
+      where
+        predicate key' = buildProductName key == buildProductName key'
 
 -- | Read and parse a derivation from a file
 readDerivation :: FilePath -> Diff (Derivation FilePath Text)
@@ -278,7 +298,7 @@ diffOutput outputName leftOutput rightOutput = do
     else do
         echo (explain ("{" <> outputName <> "}:"))
         echo (explain "    Hash algorithm:")
-        diffWith leftHashAlgo rightHashAlgo $ \(sign, hashAlgo) -> do
+        diffWith leftHashAlgo rightHashAlgo \(sign, hashAlgo) -> do
             echo ("        " <> sign hashAlgo)
 
 -- | Diff two sets of outputs
@@ -298,10 +318,10 @@ diffOutputs leftOutputs rightOutputs = do
         then return ()
         else do
             echo (explain "The set of outputs do not match:")
-            diffWith leftExtraOutputs rightExtraOutputs $ \(sign, extraOutputs) -> do
-                forM_ (Data.Map.toList extraOutputs) $ \(key, _value) -> do
+            diffWith leftExtraOutputs rightExtraOutputs \(sign, extraOutputs) -> do
+                forM_ (Data.Map.toList extraOutputs) \(key, _value) -> do
                     echo ("    " <> sign ("{" <> key <> "}"))
-    forM_ (Data.Map.toList bothOutputs) $ \(key, (leftOutput, rightOutput)) -> do
+    forM_ (Data.Map.toList bothOutputs) \(key, (leftOutput, rightOutput)) -> do
         if leftOutput == rightOutput
         then return ()
         else diffOutput key leftOutput rightOutput
@@ -388,14 +408,14 @@ diffEnv leftOutputs rightOutputs leftEnv rightEnv = do
     then return ()
     else do
         echo (explain "The environments do not match:")
-        diffWith leftExtraEnv rightExtraEnv $ \(sign, extraEnv) -> do
-            forM_ (Data.Map.toList extraEnv) $ \(key, value) -> do
+        diffWith leftExtraEnv rightExtraEnv \(sign, extraEnv) -> do
+            forM_ (Data.Map.toList extraEnv) \(key, value) -> do
                 echo ("    " <> sign (key <> "=" <> value))
-        forM_ (Data.Map.toList bothEnv) $ \(key, (leftValue, rightValue)) -> do
+        forM_ (Data.Map.toList bothEnv) \(key, (leftValue, rightValue)) -> do
             if      predicate key (leftValue, rightValue)
             then return ()
             else do
-                text <- indented 4 (diffText leftValue rightValue)
+                text <- diffText leftValue rightValue
                 echo ("    " <> key <> "=" <> text)
 
 -- | Diff input sources
@@ -406,16 +426,45 @@ diffSrcs
     -- ^ Right inputSources
     -> Diff ()
 diffSrcs leftSrcs rightSrcs = do
+    let groupedLeftSrcs  = groupSetsByName leftSrcs
+    let groupedRightSrcs = groupSetsByName rightSrcs
+
+    let leftNames  = Data.Map.keysSet groupedLeftSrcs
+    let rightNames = Data.Map.keysSet groupedRightSrcs
+
+    let leftExtraNames  = Data.Set.difference leftNames  rightNames
+    let rightExtraNames = Data.Set.difference rightNames leftNames
+
     let leftExtraSrcs  = Data.Set.difference leftSrcs  rightSrcs
     let rightExtraSrcs = Data.Set.difference rightSrcs leftSrcs
 
-    if Data.Set.null leftExtraSrcs && Data.Set.null rightExtraSrcs
-        then return ()
-        else do
-            echo (explain "The set of input sources do not match:")
-            diffWith leftExtraSrcs rightExtraSrcs $ \(sign, extraSrcs) -> do
-                forM_ extraSrcs $ \extraSrc -> do
-                    echo ("    " <> sign (pathToText extraSrc))
+    Monad.when (leftNames /= rightNames) do
+        echo (explain "The set of input source names do not match:")
+        diffWith leftExtraNames rightExtraNames \(sign, names) -> do
+            forM_ names \name -> do
+                echo ("    " <> sign name)
+
+    let assocs = Data.Map.toList (innerJoin groupedLeftSrcs groupedRightSrcs)
+
+    forM_ assocs \(inputName, (leftPaths, rightPaths)) -> do
+        let leftExtraPaths  = Data.Set.difference leftPaths  rightPaths
+        let rightExtraPaths = Data.Set.difference rightPaths leftPaths
+        case (Data.Set.toList leftExtraPaths, Data.Set.toList rightExtraPaths) of
+            ([], []) -> return ()
+            ([leftPath], [rightPath]) ->  do
+                echo (explain ("The input source named `" <> inputName <> "` differs"))
+                leftExists  <- liftIO (Directory.doesFileExist leftPath)
+                rightExists <- liftIO (Directory.doesFileExist rightPath)
+                if leftExists && rightExists
+                    then do
+                        leftText  <- liftIO (Data.Text.IO.readFile leftPath)
+                        rightText <- liftIO (Data.Text.IO.readFile rightPath)
+
+                        text <- diffText leftText rightText
+                        echo ("    " <> text)
+                    else do
+                        return ()
+                return ()
 
 diffPlatform :: Text -> Text -> Diff ()
 diffPlatform leftPlatform rightPlatform = do
@@ -423,7 +472,7 @@ diffPlatform leftPlatform rightPlatform = do
     then return ()
     else do
         echo (explain "The platforms do not match")
-        diffWith leftPlatform rightPlatform $ \(sign, platform) -> do
+        diffWith leftPlatform rightPlatform \(sign, platform) -> do
             echo ("    " <> sign platform)
 
 diffBuilder :: Text -> Text -> Diff ()
@@ -432,7 +481,7 @@ diffBuilder leftBuilder rightBuilder = do
     then return ()
     else do
         echo (explain "The builders do not match")
-        diffWith leftBuilder rightBuilder $ \(sign, builder) -> do
+        diffWith leftBuilder rightBuilder \(sign, builder) -> do
             echo ("    " <> sign builder)
 
 diffArgs :: Vector Text -> Vector Text -> Diff ()
@@ -464,7 +513,7 @@ diff topLevel leftPath leftOutputs rightPath rightOutputs = do
         echo (explain "These two derivations have already been compared")
     else do
         put (Status (Data.Set.insert diffed visited))
-        diffWith (leftPath, leftOutputs) (rightPath, rightOutputs) $ \(sign, (path, outputs)) -> do
+        diffWith (leftPath, leftOutputs) (rightPath, rightOutputs) \(sign, (path, outputs)) -> do
             echo (sign (pathToText path <> renderOutputs outputs))
 
         if derivationName leftPath /= derivationName rightPath && not topLevel
@@ -505,14 +554,14 @@ diff topLevel leftPath leftOutputs rightPath rightOutputs = do
             let leftExtraNames  = Data.Set.difference leftNames  rightNames
             let rightExtraNames = Data.Set.difference rightNames leftNames
 
-            Control.Monad.State.when (leftNames /= rightNames) $ do
-                echo (explain "The set of input names do not match:")
-                diffWith leftExtraNames rightExtraNames $ \(sign, names) -> do
-                    forM_ names $ \name -> do
+            Monad.when (leftNames /= rightNames) do
+                echo (explain "The set of input derivation names do not match:")
+                diffWith leftExtraNames rightExtraNames \(sign, names) -> do
+                    forM_ names \name -> do
                         echo ("    " <> sign name)
 
             let assocs = Data.Map.toList (innerJoin leftInputs rightInputs)
-            descended <- forM assocs $ \(inputName, (leftPaths, rightPaths)) -> do
+            descended <- forM assocs \(inputName, (leftPaths, rightPaths)) -> do
                 let leftExtraPaths =
                         Data.Map.difference leftPaths  rightPaths
                 let rightExtraPaths =
@@ -522,13 +571,13 @@ diff topLevel leftPath leftOutputs rightPath rightOutputs = do
                         return False
                     ([(leftPath', leftOutputs')], [(rightPath', rightOutputs')])
                         | leftOutputs' == rightOutputs' -> do
-                        echo (explain ("The input named `" <> inputName <> "` differs"))
+                        echo (explain ("The input derivation named `" <> inputName <> "` differs"))
                         indented 2 (diff False leftPath' leftOutputs' rightPath' rightOutputs')
                         return True
                     _ -> do
-                        echo (explain ("The set of inputs named `" <> inputName <> "` do not match"))
-                        diffWith leftExtraPaths rightExtraPaths $ \(sign, extraPaths) -> do
-                            forM_ (Data.Map.toList extraPaths) $ \(extraPath, outputs) -> do
+                        echo (explain ("The set of input derivations named `" <> inputName <> "` do not match"))
+                        diffWith leftExtraPaths rightExtraPaths \(sign, extraPaths) -> do
+                            forM_ (Data.Map.toList extraPaths) \(extraPath, outputs) -> do
                                 echo ("    " <> sign (pathToText extraPath <> renderOutputs outputs))
                         return False
 
