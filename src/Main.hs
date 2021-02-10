@@ -1,10 +1,11 @@
 {-# LANGUAGE ApplicativeDo              #-}
 {-# LANGUAGE BlockArguments             #-}
+{-# LANGUAGE CPP                        #-}
 {-# LANGUAGE DuplicateRecordFields      #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE NamedFieldPuns             #-}
 {-# LANGUAGE OverloadedStrings          #-}
-{-# LANGUAGE CPP                        #-}
 
 module Main where
 
@@ -26,7 +27,6 @@ import Options.Applicative (Parser, ParserInfo)
 import qualified Control.Monad        as Monad
 import qualified Control.Monad.Reader
 import qualified Control.Monad.State
-import qualified Data.Algorithm.Diff  as Diff
 import qualified Data.Attoparsec.Text
 import qualified Data.Map
 import qualified Data.Set
@@ -36,6 +36,7 @@ import qualified Data.Vector
 import qualified GHC.IO.Encoding
 import qualified Nix.Derivation
 import qualified Options.Applicative
+import qualified Patience
 import qualified System.Directory     as Directory
 import qualified System.Posix.IO
 import qualified System.Posix.Terminal
@@ -264,6 +265,41 @@ plus tty text = green tty ("+ " <> text)
 explain :: Text -> Text
 explain text = "• " <> text
 
+-- `getGroupedDiff` from `Diff` library, adapted for `patience`
+getGroupedDiff :: Ord a => [a] -> [a] -> [Patience.Item [a]]
+getGroupedDiff oldList newList = go $ Patience.diff oldList newList
+  where
+    go = \case
+      Patience.Old x : xs ->
+        let (fs, rest) = goOlds xs
+         in Patience.Old (x : fs) : go rest
+      Patience.New x : xs ->
+        let (fs, rest) = goNews xs
+         in Patience.New (x : fs) : go rest
+      Patience.Both x y : xs ->
+        let (fs, rest) = goBoth xs
+            (fxs, fys) = unzip fs
+         in Patience.Both (x : fxs) (y : fys) : go rest
+      [] -> []
+
+    goOlds = \case
+      Patience.Old x : xs ->
+        let (fs, rest) = goOlds xs
+         in (x : fs, rest)
+      xs -> ([], xs)
+
+    goNews = \case
+      Patience.New x : xs ->
+        let (fs, rest) = goNews xs
+         in (x : fs, rest)
+      xs -> ([], xs)
+
+    goBoth = \case
+      Patience.Both x y : xs ->
+        let (fs, rest) = goBoth xs
+         in ((x, y) : fs, rest)
+      xs -> ([], xs)
+
 {-| Utility to automate a common pattern of printing the two halves of a diff.
     This passes the correct formatting function to each half
 -}
@@ -326,10 +362,10 @@ diffOutputs leftOutputs rightOutputs = do
         then return ()
         else diffOutput key leftOutput rightOutput
 
-mapDiff :: (a -> b) -> Diff.Diff a -> Diff.Diff b
-mapDiff f (Diff.First  l) = Diff.First (f l)
-mapDiff f (Diff.Second r) = Diff.Second (f r)
-mapDiff f (Diff.Both l r) = Diff.Both (f l) (f r)
+mapDiff :: (a -> b) -> Patience.Item a -> Patience.Item b
+mapDiff f (Patience.Old  l  ) = Patience.Old (f l)
+mapDiff f (Patience.New    r) = Patience.New (f r)
+mapDiff f (Patience.Both l r) = Patience.Both (f l) (f r)
 
 -- | Diff two `Text` values
 diffText
@@ -351,9 +387,9 @@ diffText left right = do
     let chunks =
             if lineOriented
                 then
-                    Diff.getDiff leftLines rightLines
+                    Patience.diff leftLines rightLines
                 else
-                    fmap (mapDiff Data.Text.pack) (Diff.getGroupedDiff leftString rightString)
+                    fmap (mapDiff Data.Text.pack) (getGroupedDiff leftString rightString)
 
     let prefix = Data.Text.replicate n " "
 
@@ -367,11 +403,11 @@ diffText left right = do
               where
                 indentLine line = prefix <> "    " <> line
 
-    let renderChunk (Diff.First  l) =
+    let renderChunk (Patience.Old  l  ) =
             redBackground   lineOriented tty l
-        renderChunk (Diff.Second r) =
+        renderChunk (Patience.New    r) =
             greenBackground lineOriented tty r
-        renderChunk (Diff.Both l _) =
+        renderChunk (Patience.Both l _) =
             grey            lineOriented tty l
 
     return (format (Data.Text.concat (fmap renderChunk chunks)))
@@ -493,12 +529,12 @@ diffArgs leftArgs rightArgs = do
         echo (explain "The arguments do not match")
         let leftList  = Data.Vector.toList leftArgs
         let rightList = Data.Vector.toList rightArgs
-        let diffs = Diff.getDiff leftList rightList
-        let renderDiff (Diff.First arg) =
+        let diffs = Patience.diff leftList rightList
+        let renderDiff (Patience.Old arg) =
                 echo ("    " <> minus tty arg)
-            renderDiff (Diff.Second arg) =
+            renderDiff (Patience.New arg) =
                 echo ("    " <> plus tty arg)
-            renderDiff (Diff.Both arg _) =
+            renderDiff (Patience.Both arg _) =
                 echo ("    " <> explain arg)
         mapM_ renderDiff diffs
 
