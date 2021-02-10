@@ -363,8 +363,8 @@ diffOutputs leftOutputs rightOutputs = do
         else diffOutput key leftOutput rightOutput
 
 mapDiff :: (a -> b) -> Patience.Item a -> Patience.Item b
-mapDiff f (Patience.Old  l) = Patience.Old (f l)
-mapDiff f (Patience.New r) = Patience.New (f r)
+mapDiff f (Patience.Old  l  ) = Patience.Old (f l)
+mapDiff f (Patience.New    r) = Patience.New (f r)
 mapDiff f (Patience.Both l r) = Patience.Both (f l) (f r)
 
 -- | Diff two `Text` values
@@ -403,9 +403,9 @@ diffText left right = do
               where
                 indentLine line = prefix <> "    " <> line
 
-    let renderChunk (Patience.Old  l) =
+    let renderChunk (Patience.Old  l  ) =
             redBackground   lineOriented tty l
-        renderChunk (Patience.New r) =
+        renderChunk (Patience.New    r) =
             greenBackground lineOriented tty r
         renderChunk (Patience.Both l _) =
             grey            lineOriented tty l
