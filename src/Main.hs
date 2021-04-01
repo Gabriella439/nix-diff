@@ -64,12 +64,18 @@ parseColor =
             "never"  -> return Never
             _        -> fail "Invalid color"
 
-parseLineOriented :: Parser Bool
+parseLineOriented :: Parser Orientation
 parseLineOriented =
-    Options.Applicative.switch
-        (   Options.Applicative.long "line-oriented"
-        <>  Options.Applicative.help "Display textual differences on a per-line basis instead of a per-character basis"
-        )
+        per "line" Line
+    <|> per "character" Character
+    <|> per "word" Word
+    <|> pure Word
+  where
+    per x orientation =
+        Options.Applicative.flag' orientation
+            (   Options.Applicative.long (x <> "-oriented")
+            <>  Options.Applicative.help ("Display textual differences on a per-" <> x <> " basis")
+            )
 
 parseEnvironment :: Parser Bool
 parseEnvironment =
@@ -79,22 +85,24 @@ parseEnvironment =
         )
 
 data Options = Options
-    { left         :: FilePath
-    , right        :: FilePath
-    , color        :: Color
-    , lineOriented :: Bool
-    , environment  :: Bool
+    { left        :: FilePath
+    , right       :: FilePath
+    , color       :: Color
+    , orientation :: Orientation
+    , environment :: Bool
     }
+
+data Orientation = Character | Word | Line
 
 parseOptions :: Parser Options
 parseOptions = do
-    left         <- parseLeft
-    right        <- parseRight
-    color        <- parseColor
-    lineOriented <- parseLineOriented
-    environment  <- parseEnvironment
+    left        <- parseLeft
+    right       <- parseRight
+    color       <- parseColor
+    orientation <- parseLineOriented
+    environment <- parseEnvironment
 
-    return (Options { left, right, color, lineOriented, environment })
+    return (Options { left, right, color, orientation, environment })
   where
     parseFilePath metavar = do
         Options.Applicative.strArgument
@@ -113,10 +121,10 @@ parserInfo =
         )
 
 data Context = Context
-    { tty          :: TTY
-    , indent       :: Natural
-    , lineOriented :: Bool
-    , environment  :: Bool
+    { tty         :: TTY
+    , indent      :: Natural
+    , orientation :: Orientation
+    , environment :: Bool
     }
 
 newtype Status = Status { visited :: Set Diffed }
@@ -228,11 +236,13 @@ red  IsTTY text = "\ESC[1;31m" <> text <> "\ESC[0m"
 red NotTTY text = text
 
 -- | Color text background red
-redBackground  :: Bool -> TTY -> Text -> Text
-redBackground False IsTTY  text = "\ESC[41m" <> text <> "\ESC[0m"
-redBackground True  IsTTY  text = "\ESC[41m" <> text <> "\ESC[0m\n"
-redBackground False NotTTY text = "←" <> text <> "←"
-redBackground True  NotTTY text = "- " <> text <> "\n"
+redBackground  :: Orientation -> TTY -> Text -> Text
+redBackground Character IsTTY  text = "\ESC[41m" <> text <> "\ESC[0m"
+redBackground Word      IsTTY  text = "\ESC[41m" <> text <> " \ESC[0m"
+redBackground Line      IsTTY  text = "\ESC[41m" <> text <> "\ESC[0m\n"
+redBackground Character NotTTY text = "←" <> text <> "←"
+redBackground Word      NotTTY text = "←" <> text <> " ←"
+redBackground Line      NotTTY text = "- " <> text <> "\n"
 
 -- | Color text green
 green :: TTY -> Text -> Text
@@ -240,18 +250,22 @@ green  IsTTY text = "\ESC[1;32m" <> text <> "\ESC[0m"
 green NotTTY text = text
 
 -- | Color text background green
-greenBackground :: Bool -> TTY -> Text -> Text
-greenBackground False IsTTY  text = "\ESC[42m" <> text <> "\ESC[0m"
-greenBackground True  IsTTY  text = "\ESC[42m" <> text <> "\ESC[0m\n"
-greenBackground False NotTTY text = "→" <> text <> "→"
-greenBackground True  NotTTY text = "+ " <> text <> "\n"
+greenBackground :: Orientation -> TTY -> Text -> Text
+greenBackground Character IsTTY  text = "\ESC[42m" <> text <> "\ESC[0m"
+greenBackground Word      IsTTY  text = "\ESC[42m" <> text <> " \ESC[0m"
+greenBackground Line      IsTTY  text = "\ESC[42m" <> text <> "\ESC[0m\n"
+greenBackground Character NotTTY text = "→" <> text <> "→"
+greenBackground Word      NotTTY text = "→" <> text <> " →"
+greenBackground Line      NotTTY text = "+ " <> text <> "\n"
 
 -- | Color text grey
-grey :: Bool -> TTY -> Text -> Text
-grey False  IsTTY text = "\ESC[1;2m" <> text <> "\ESC[0m"
-grey True   IsTTY text = "\ESC[1;2m" <> text <> "\ESC[0m\n"
-grey False NotTTY text = text
-grey True  NotTTY text = "  " <> text <> "\n"
+grey :: Orientation -> TTY -> Text -> Text
+grey Character IsTTY  text = "\ESC[1;2m" <> text <> "\ESC[0m"
+grey Word      IsTTY  text = "\ESC[1;2m" <> text <> " \ESC[0m"
+grey Line      IsTTY  text = "\ESC[1;2m" <> text <> "\ESC[0m\n"
+grey Character NotTTY text = text
+grey Word      NotTTY text = text <> " "
+grey Line      NotTTY text = "  " <> text <> "\n"
 
 -- | Format the left half of a diff
 minus :: TTY -> Text -> Text
@@ -375,22 +389,27 @@ diffText
     -- ^ Right value to compare
     -> Diff Text
 diffText left right = do
-    Context { indent, lineOriented, tty } <- ask
+    Context{ indent, orientation, tty } <- ask
+
     let n = fromIntegral indent
 
     let leftString  = Data.Text.unpack left
     let rightString = Data.Text.unpack right
 
+    let leftWords  = Data.Text.splitOn " " left
+    let rightWords = Data.Text.splitOn " " right
+
     let leftLines  = Data.Text.lines left
     let rightLines = Data.Text.lines right
 
     let chunks =
-            if lineOriented
-                then
-                    Patience.diff leftLines rightLines
-                else
+            case orientation of
+                Character ->
                     fmap (mapDiff Data.Text.pack) (getGroupedDiff leftString rightString)
-
+                Word ->
+                    Patience.diff leftWords rightWords
+                Line ->
+                    Patience.diff leftLines rightLines
     let prefix = Data.Text.replicate n " "
 
     let format text =
@@ -404,11 +423,11 @@ diffText left right = do
                 indentLine line = prefix <> "    " <> line
 
     let renderChunk (Patience.Old  l  ) =
-            redBackground   lineOriented tty l
+            redBackground   orientation tty l
         renderChunk (Patience.New    r) =
-            greenBackground lineOriented tty r
+            greenBackground orientation tty r
         renderChunk (Patience.Both l _) =
-            grey            lineOriented tty l
+            grey            orientation tty l
 
     return (format (Data.Text.concat (fmap renderChunk chunks)))
 
@@ -633,7 +652,7 @@ main :: IO ()
 main = do
     GHC.IO.Encoding.setLocaleEncoding GHC.IO.Encoding.utf8
 
-    Options { left, right, color, lineOriented, environment } <- Options.Applicative.execParser parserInfo
+    Options { left, right, color, orientation, environment } <- Options.Applicative.execParser parserInfo
 
     tty <- case color of
         Never -> do
@@ -645,7 +664,7 @@ main = do
             return (if b then IsTTY else NotTTY)
 
     let indent = 0
-    let context = Context { tty, indent, lineOriented, environment }
+    let context = Context { tty, indent, orientation, environment }
     let status = Status Data.Set.empty
     let action = diff True left (Data.Set.singleton "out") right (Data.Set.singleton "out")
     Control.Monad.State.evalStateT (Control.Monad.Reader.runReaderT (unDiff action) context) status
