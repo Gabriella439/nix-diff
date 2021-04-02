@@ -28,7 +28,9 @@ import qualified Control.Monad        as Monad
 import qualified Control.Monad.Reader
 import qualified Control.Monad.State
 import qualified Data.Attoparsec.Text
+import qualified Data.Char            as Char
 import qualified Data.Map
+import qualified Data.List            as List
 import qualified Data.Set
 import qualified Data.Text
 import qualified Data.Text.IO
@@ -115,7 +117,7 @@ parseOptions = do
 parserInfo :: ParserInfo Options
 parserInfo =
     Options.Applicative.info
-        parseOptions
+        (Options.Applicative.helper <*> parseOptions)
         (   Options.Applicative.fullDesc
         <>  Options.Applicative.header "Explain why two derivations differ"
         )
@@ -237,35 +239,38 @@ red NotTTY text = text
 
 -- | Color text background red
 redBackground  :: Orientation -> TTY -> Text -> Text
-redBackground Character IsTTY  text = "\ESC[41m" <> text <> "\ESC[0m"
-redBackground Word      IsTTY  text = "\ESC[41m" <> text <> " \ESC[0m"
-redBackground Line      IsTTY  text = "\ESC[41m" <> text <> "\ESC[0m\n"
-redBackground Character NotTTY text = "←" <> text <> "←"
-redBackground Word      NotTTY text = "←" <> text <> " ←"
-redBackground Line      NotTTY text = "- " <> text <> "\n"
+redBackground Line IsTTY text = "\ESC[41m" <> prefix <> "\ESC[0m" <> suffix
+  where
+    (prefix, suffix) = Data.Text.break lineBoundary text
+redBackground Word IsTTY text = "\ESC[41m" <> prefix <> "\ESC[0m" <> suffix
+  where
+    (prefix, suffix) = Data.Text.break wordBoundary text
+redBackground Character IsTTY text = "\ESC[41m" <> text <> "\ESC[0m"
+redBackground Line NotTTY text = "- " <> text
+redBackground _    NotTTY text = "←" <> text <> "←"
 
 -- | Color text green
 green :: TTY -> Text -> Text
-green  IsTTY text = "\ESC[1;32m" <> text <> "\ESC[0m"
+green IsTTY  text = "\ESC[1;32m" <> text <> "\ESC[0m"
 green NotTTY text = text
 
 -- | Color text background green
 greenBackground :: Orientation -> TTY -> Text -> Text
+greenBackground Line IsTTY text = "\ESC[42m" <> prefix <> "\ESC[0m" <> suffix
+  where
+    (prefix, suffix) = Data.Text.break lineBoundary text
+greenBackground Word IsTTY text = "\ESC[42m" <> prefix <> "\ESC[0m" <> suffix
+  where
+    (prefix, suffix) = Data.Text.break wordBoundary text
 greenBackground Character IsTTY  text = "\ESC[42m" <> text <> "\ESC[0m"
-greenBackground Word      IsTTY  text = "\ESC[42m" <> text <> " \ESC[0m"
-greenBackground Line      IsTTY  text = "\ESC[42m" <> text <> "\ESC[0m\n"
-greenBackground Character NotTTY text = "→" <> text <> "→"
-greenBackground Word      NotTTY text = "→" <> text <> " →"
-greenBackground Line      NotTTY text = "+ " <> text <> "\n"
+greenBackground Line NotTTY text = "+ " <> text
+greenBackground _    NotTTY text = "→" <> text <> "→"
 
 -- | Color text grey
 grey :: Orientation -> TTY -> Text -> Text
-grey Character IsTTY  text = "\ESC[1;2m" <> text <> "\ESC[0m"
-grey Word      IsTTY  text = "\ESC[1;2m" <> text <> " \ESC[0m"
-grey Line      IsTTY  text = "\ESC[1;2m" <> text <> "\ESC[0m\n"
-grey Character NotTTY text = text
-grey Word      NotTTY text = text <> " "
-grey Line      NotTTY text = "  " <> text <> "\n"
+grey _    IsTTY  text = "\ESC[1;2m" <> text <> "\ESC[0m"
+grey Line NotTTY text = "  " <> text
+grey _    NotTTY text = text
 
 -- | Format the left half of a diff
 minus :: TTY -> Text -> Text
@@ -381,6 +386,40 @@ mapDiff f (Patience.Old  l  ) = Patience.Old (f l)
 mapDiff f (Patience.New    r) = Patience.New (f r)
 mapDiff f (Patience.Both l r) = Patience.Both (f l) (f r)
 
+{-| Split `Text` into spans of `Text` that alternatively fail and satisfy the
+    given predicate
+
+    The first span (if present) does not satisfy the predicate (even if the
+    span is empty)
+
+    >>> decomposeOn (== 'b') "aabbaa"
+    ["aa","bb","aa"]
+    >>> decomposeOn (== 'b') "bbaa"
+    ["","bb","aa"]
+    >>> decomposeOn (== 'b') ""
+    []
+-}
+decomposeOn :: (Char -> Bool) -> Text -> [Text]
+decomposeOn predicate = unsatisfy
+  where
+    unsatisfy text
+        | Data.Text.null text = []
+        | otherwise           = prefix : satisfy suffix
+      where
+        (prefix, suffix) = Data.Text.break predicate text
+
+    satisfy text
+        | Data.Text.null text = []
+        | otherwise           = prefix : unsatisfy suffix
+      where
+        (prefix, suffix) = Data.Text.span predicate text
+
+lineBoundary :: Char -> Bool
+lineBoundary = ('\n' ==)
+
+wordBoundary :: Char -> Bool
+wordBoundary = Char.isSpace
+
 -- | Diff two `Text` values
 diffText
     :: Text
@@ -396,11 +435,19 @@ diffText left right = do
     let leftString  = Data.Text.unpack left
     let rightString = Data.Text.unpack right
 
-    let leftWords  = Data.Text.splitOn " " left
-    let rightWords = Data.Text.splitOn " " right
+    let decomposeWords = decomposeOn wordBoundary
 
-    let leftLines  = Data.Text.lines left
-    let rightLines = Data.Text.lines right
+    let decomposeLines text = loop (decomposeOn lineBoundary text)
+          where
+            -- Groups each newline character with the preceding line
+            loop (x : y : zs) = (x <> y) : loop zs
+            loop          zs  = zs
+
+    let leftWords  = decomposeWords left
+    let rightWords = decomposeWords right
+
+    let leftLines  = decomposeLines left
+    let rightLines = decomposeLines right
 
     let chunks =
             case orientation of
