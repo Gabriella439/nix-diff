@@ -1,5 +1,5 @@
 name:                nix-diff
-version:             1.0.13
+version:             1.0.14
 synopsis:            Explain why two Nix derivations differ
 description:         This package provides a @nix-diff@ executable which
                      explains why two Nix derivations (i.e. @*.drv@ files)
@@ -15,6 +15,7 @@ build-type:          Simple
 tested-with:         GHC == 8.0.2, GHC == 8.2.2, GHC == 8.8.3
 cabal-version:       >= 1.10
 extra-source-files:  README.md
+                     CHANGELOG.md
 
 executable nix-diff
   main-is:             Main.hs
