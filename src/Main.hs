@@ -28,7 +28,9 @@ import qualified Control.Monad        as Monad
 import qualified Control.Monad.Reader
 import qualified Control.Monad.State
 import qualified Data.Attoparsec.Text
+import qualified Data.Char            as Char
 import qualified Data.Map
+import qualified Data.List            as List
 import qualified Data.Set
 import qualified Data.Text
 import qualified Data.Text.IO
@@ -252,20 +254,20 @@ green NotTTY text = text
 -- | Color text background green
 greenBackground :: Orientation -> TTY -> Text -> Text
 greenBackground Character IsTTY  text = "\ESC[42m" <> text <> "\ESC[0m"
-greenBackground Word      IsTTY  text = "\ESC[42m" <> text <> " \ESC[0m"
-greenBackground Line      IsTTY  text = "\ESC[42m" <> text <> "\ESC[0m\n"
+greenBackground Word      IsTTY  text = "\ESC[42m" <> text <> "\ESC[0m"
+greenBackground Line      IsTTY  text = "\ESC[42m" <> text <> "\ESC[0m"
 greenBackground Character NotTTY text = "→" <> text <> "→"
-greenBackground Word      NotTTY text = "→" <> text <> " →"
-greenBackground Line      NotTTY text = "+ " <> text <> "\n"
+greenBackground Word      NotTTY text = "→" <> text <> "→"
+greenBackground Line      NotTTY text = "+ " <> text
 
 -- | Color text grey
 grey :: Orientation -> TTY -> Text -> Text
 grey Character IsTTY  text = "\ESC[1;2m" <> text <> "\ESC[0m"
-grey Word      IsTTY  text = "\ESC[1;2m" <> text <> " \ESC[0m"
-grey Line      IsTTY  text = "\ESC[1;2m" <> text <> "\ESC[0m\n"
+grey Word      IsTTY  text = "\ESC[1;2m" <> text <> "\ESC[0m"
+grey Line      IsTTY  text = "\ESC[1;2m" <> text <> "\ESC[0m"
 grey Character NotTTY text = text
-grey Word      NotTTY text = text <> " "
-grey Line      NotTTY text = "  " <> text <> "\n"
+grey Word      NotTTY text = text
+grey Line      NotTTY text = "  " <> text
 
 -- | Format the left half of a diff
 minus :: TTY -> Text -> Text
@@ -381,6 +383,35 @@ mapDiff f (Patience.Old  l  ) = Patience.Old (f l)
 mapDiff f (Patience.New    r) = Patience.New (f r)
 mapDiff f (Patience.Both l r) = Patience.Both (f l) (f r)
 
+{-| Split `Text` into spans of `Text` that alternatively satisfy and fail the
+    given predicate
+
+    The first span (if present) satisfies the predicate (even if the span is
+    empty)
+
+    >>> decomposeOn (== 'a') "aabbaa"
+    ["aa","bb","aa"]
+    >>> decomposeOn (== 'a') "bbaa"
+    ["","bb","aa"]
+    >>> decomposeOn (== 'a') ""
+    []
+
+-}
+decomposeOn :: (Char -> Bool) -> Text -> [Text]
+decomposeOn predicate = satisfy
+  where
+    satisfy text
+        | Data.Text.null text = []
+        | otherwise           = prefix : unsatisfy suffix
+      where
+        (prefix, suffix) = Data.Text.span predicate text
+
+    unsatisfy text
+        | Data.Text.null text = []
+        | otherwise           = prefix : satisfy suffix
+      where
+        (prefix, suffix) = Data.Text.break predicate text
+
 -- | Diff two `Text` values
 diffText
     :: Text
@@ -396,11 +427,14 @@ diffText left right = do
     let leftString  = Data.Text.unpack left
     let rightString = Data.Text.unpack right
 
-    let leftWords  = Data.Text.splitOn " " left
-    let rightWords = Data.Text.splitOn " " right
+    let decomposeWords = decomposeOn Char.isSpace
+    let decomposeLines = decomposeOn (== '\n')
 
-    let leftLines  = Data.Text.lines left
-    let rightLines = Data.Text.lines right
+    let leftWords  = decomposeWords left
+    let rightWords = decomposeWords right
+
+    let leftLines  = decomposeLines left
+    let rightLines = decomposeLines right
 
     let chunks =
             case orientation of
