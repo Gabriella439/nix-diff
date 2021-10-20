@@ -30,10 +30,9 @@ import qualified Control.Monad.State
 import qualified Data.Attoparsec.Text
 import qualified Data.Char            as Char
 import qualified Data.Map
-import qualified Data.List            as List
 import qualified Data.Set
-import qualified Data.Text
-import qualified Data.Text.IO
+import qualified Data.Text            as Text
+import qualified Data.Text.IO         as Text.IO
 import qualified Data.Vector
 import qualified GHC.IO.Encoding
 import qualified Nix.Derivation
@@ -60,7 +59,7 @@ parseColor =
   where
     reader = do
         string <- Options.Applicative.str
-        case string of
+        case string :: Text of
             "always" -> return Always
             "auto"   -> return Auto
             "never"  -> return Never
@@ -155,15 +154,12 @@ echo :: Text -> Diff ()
 echo text = do
     Context { indent } <- ask
     let n = fromIntegral indent
-    liftIO (Data.Text.IO.putStrLn (Data.Text.replicate n " " <> text))
+    liftIO (Text.IO.putStrLn (Text.replicate n " " <> text))
 
 indented :: Natural -> Diff a -> Diff a
 indented n = local adapt
   where
     adapt context = context { indent = indent context + n }
-
-pathToText :: FilePath -> Text
-pathToText = Data.Text.pack
 
 {-| Extract the name of a derivation (i.e. the part after the hash)
 
@@ -178,7 +174,7 @@ pathToText = Data.Text.pack
     underneath `/nix/store`, but this is the overwhelmingly common use case
 -}
 derivationName :: FilePath -> Text
-derivationName = Data.Text.dropEnd 4 . Data.Text.drop 44 . pathToText
+derivationName = Text.dropEnd 4 . Text.drop 44 . Text.pack
 
 -- | Group paths by their name
 groupByName :: Map FilePath a -> Map Text (Map FilePath a)
@@ -197,7 +193,7 @@ groupByName m = Data.Map.fromList assocs
     > /nix/store/${32_CHARACTER_HASH}-${NAME}.drv
 -}
 buildProductName :: FilePath -> Text
-buildProductName = Data.Text.drop 44 . pathToText
+buildProductName = Text.drop 44 . Text.pack
 
 -- | Like `groupByName`, but for `Set`s
 groupSetsByName :: Set FilePath -> Map Text (Set FilePath)
@@ -211,7 +207,7 @@ groupSetsByName s = Data.Map.fromList (fmap toAssoc (Data.Set.toList s))
 readDerivation :: FilePath -> Diff (Derivation FilePath Text)
 readDerivation path = do
     let string = path
-    text <- liftIO (Data.Text.IO.readFile string)
+    text <- liftIO (Text.IO.readFile string)
     case Data.Attoparsec.Text.parse Nix.Derivation.parseDerivation text of
         Done _ derivation -> do
             return derivation
@@ -241,10 +237,10 @@ red NotTTY text = text
 redBackground  :: Orientation -> TTY -> Text -> Text
 redBackground Line IsTTY text = "\ESC[41m" <> prefix <> "\ESC[0m" <> suffix
   where
-    (prefix, suffix) = Data.Text.break lineBoundary text
+    (prefix, suffix) = Text.break lineBoundary text
 redBackground Word IsTTY text = "\ESC[41m" <> prefix <> "\ESC[0m" <> suffix
   where
-    (prefix, suffix) = Data.Text.break wordBoundary text
+    (prefix, suffix) = Text.break wordBoundary text
 redBackground Character IsTTY text = "\ESC[41m" <> text <> "\ESC[0m"
 redBackground Line NotTTY text = "- " <> text
 redBackground _    NotTTY text = "←" <> text <> "←"
@@ -258,10 +254,10 @@ green NotTTY text = text
 greenBackground :: Orientation -> TTY -> Text -> Text
 greenBackground Line IsTTY text = "\ESC[42m" <> prefix <> "\ESC[0m" <> suffix
   where
-    (prefix, suffix) = Data.Text.break lineBoundary text
+    (prefix, suffix) = Text.break lineBoundary text
 greenBackground Word IsTTY text = "\ESC[42m" <> prefix <> "\ESC[0m" <> suffix
   where
-    (prefix, suffix) = Data.Text.break wordBoundary text
+    (prefix, suffix) = Text.break wordBoundary text
 greenBackground Character IsTTY  text = "\ESC[42m" <> text <> "\ESC[0m"
 greenBackground Line NotTTY text = "+ " <> text
 greenBackground _    NotTTY text = "→" <> text <> "→"
@@ -331,7 +327,7 @@ diffWith l r k = do
 -- | Format the derivation outputs
 renderOutputs :: Set Text -> Text
 renderOutputs outputs =
-    ":{" <> Data.Text.intercalate "," (Data.Set.toList outputs) <> "}"
+    ":{" <> Text.intercalate "," (Data.Set.toList outputs) <> "}"
 
 -- | Diff two outputs
 diffOutput
@@ -403,16 +399,16 @@ decomposeOn :: (Char -> Bool) -> Text -> [Text]
 decomposeOn predicate = unsatisfy
   where
     unsatisfy text
-        | Data.Text.null text = []
-        | otherwise           = prefix : satisfy suffix
+        | Text.null text = []
+        | otherwise      = prefix : satisfy suffix
       where
-        (prefix, suffix) = Data.Text.break predicate text
+        (prefix, suffix) = Text.break predicate text
 
     satisfy text
-        | Data.Text.null text = []
-        | otherwise           = prefix : unsatisfy suffix
+        | Text.null text = []
+        | otherwise      = prefix : unsatisfy suffix
       where
-        (prefix, suffix) = Data.Text.span predicate text
+        (prefix, suffix) = Text.span predicate text
 
 lineBoundary :: Char -> Bool
 lineBoundary = ('\n' ==)
@@ -432,8 +428,8 @@ diffText left right = do
 
     let n = fromIntegral indent
 
-    let leftString  = Data.Text.unpack left
-    let rightString = Data.Text.unpack right
+    let leftString  = Text.unpack left
+    let rightString = Text.unpack right
 
     let decomposeWords = decomposeOn wordBoundary
 
@@ -452,20 +448,20 @@ diffText left right = do
     let chunks =
             case orientation of
                 Character ->
-                    fmap (mapDiff Data.Text.pack) (getGroupedDiff leftString rightString)
+                    fmap (mapDiff Text.pack) (getGroupedDiff leftString rightString)
                 Word ->
                     Patience.diff leftWords rightWords
                 Line ->
                     Patience.diff leftLines rightLines
-    let prefix = Data.Text.replicate n " "
+    let prefix = Text.replicate n " "
 
     let format text =
-            if 80 <= n + Data.Text.length text
+            if 80 <= n + Text.length text
             then "''\n" <> indentedText <> prefix <> "''"
             else text
           where
             indentedText =
-                (Data.Text.unlines . fmap indentLine . Data.Text.lines) text
+                (Text.unlines . fmap indentLine . Text.lines) text
               where
                 indentLine line = prefix <> "    " <> line
 
@@ -476,7 +472,7 @@ diffText left right = do
         renderChunk (Patience.Both l _) =
             grey            orientation tty l
 
-    return (format (Data.Text.concat (fmap renderChunk chunks)))
+    return (format (Text.concat (fmap renderChunk chunks)))
 
 -- | Diff two environments
 diffEnv
@@ -537,9 +533,6 @@ diffSrcs leftSrcs rightSrcs = do
     let leftExtraNames  = Data.Set.difference leftNames  rightNames
     let rightExtraNames = Data.Set.difference rightNames leftNames
 
-    let leftExtraSrcs  = Data.Set.difference leftSrcs  rightSrcs
-    let rightExtraSrcs = Data.Set.difference rightSrcs leftSrcs
-
     Monad.when (leftNames /= rightNames) do
         echo (explain "The set of input source names do not match:")
         diffWith leftExtraNames rightExtraNames \(sign, names) -> do
@@ -559,14 +552,19 @@ diffSrcs leftSrcs rightSrcs = do
                 rightExists <- liftIO (Directory.doesFileExist rightPath)
                 if leftExists && rightExists
                     then do
-                        leftText  <- liftIO (Data.Text.IO.readFile leftPath)
-                        rightText <- liftIO (Data.Text.IO.readFile rightPath)
+                        leftText  <- liftIO (Text.IO.readFile leftPath)
+                        rightText <- liftIO (Text.IO.readFile rightPath)
 
                         text <- diffText leftText rightText
                         echo ("    " <> text)
                     else do
                         return ()
                 return ()
+            (leftExtraPathsList, rightExtraPathsList) -> do
+                echo (explain ("The input sources named `" <> inputName <> "` differ"))
+                diffWith leftExtraPathsList rightExtraPathsList \(sign, paths) -> do
+                    forM_ paths \path -> do
+                        echo ("    " <>  sign (Text.pack path))
 
 diffPlatform :: Text -> Text -> Diff ()
 diffPlatform leftPlatform rightPlatform = do
@@ -616,7 +614,7 @@ diff topLevel leftPath leftOutputs rightPath rightOutputs = do
     else do
         put (Status (Data.Set.insert diffed visited))
         diffWith (leftPath, leftOutputs) (rightPath, rightOutputs) \(sign, (path, outputs)) -> do
-            echo (sign (pathToText path <> renderOutputs outputs))
+            echo (sign (Text.pack path <> renderOutputs outputs))
 
         if derivationName leftPath /= derivationName rightPath && not topLevel
         then do
@@ -680,7 +678,7 @@ diff topLevel leftPath leftOutputs rightPath rightOutputs = do
                         echo (explain ("The set of input derivations named `" <> inputName <> "` do not match"))
                         diffWith leftExtraPaths rightExtraPaths \(sign, extraPaths) -> do
                             forM_ (Data.Map.toList extraPaths) \(extraPath, outputs) -> do
-                                echo ("    " <> sign (pathToText extraPath <> renderOutputs outputs))
+                                echo ("    " <> sign (Text.pack extraPath <> renderOutputs outputs))
                         return False
 
             Context { environment } <- ask
