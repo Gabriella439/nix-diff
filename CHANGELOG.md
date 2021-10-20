@@ -1,3 +1,9 @@
+1.0.15
+
+* [Fix non-exhaustive pattern match](https://github.com/Gabriel439/nix-diff/pull/45)
+    * This non-exhaustive pattern match would cause the program to fail if
+      the new derivation added or removed input sources
+
 1.0.14
 
 * [Improve whitespace handling](https://github.com/Gabriel439/nix-diff/pull/40)
