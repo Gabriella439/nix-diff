@@ -79,7 +79,7 @@ $ nix-diff /nix/store/6z9nr5pzs4j1v9mld517dmlcz61zy78z-nixos-system-nixos-18.03p
 
 It's also possible to pass store paths or links to store paths, for example:
 
-```bash
+```ShellSession
 $ nix-build example.nix
 $ nix-diff /run/current-system ./result
 ```

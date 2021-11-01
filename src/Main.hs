@@ -15,6 +15,7 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader (MonadReader, ReaderT, ask, local)
 import Control.Monad.State (MonadState, StateT, get, put)
 import Data.Attoparsec.Text (IResult(..))
+import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map (Map)
 import Data.Monoid ((<>))
 import Data.Set (Set)
@@ -29,7 +30,7 @@ import qualified Control.Monad.Reader
 import qualified Control.Monad.State
 import qualified Data.Attoparsec.Text
 import qualified Data.Char            as Char
-import qualified Data.List            as List
+import qualified Data.List.NonEmpty
 import qualified Data.Map
 import qualified Data.Set
 import qualified Data.String          as String
@@ -41,6 +42,7 @@ import qualified Nix.Derivation
 import qualified Options.Applicative
 import qualified Patience
 import qualified System.Directory     as Directory
+import qualified System.FilePath      as FilePath
 import qualified System.Posix.IO
 import qualified System.Posix.Terminal
 import qualified System.Process       as Process
@@ -222,13 +224,16 @@ readDerivation path = do
 -- queried.
 readInput :: FilePath -> Diff (Derivation FilePath Text)
 readInput path =
-    let string = path in
-    if List.isSuffixOf ".drv" string
+    if FilePath.isExtensionOf ".drv" path
     then readDerivation path
     else do
-        result <- liftIO (Process.readProcess "nix-store" [ "-qd", string ] [])
-        let drv_path = last (String.lines result)
-        readDerivation drv_path
+        let string = path
+        result <- liftIO (Process.readProcess "nix-store" [ "--query", "--deriver", string ] [])
+        case String.lines result of
+            [] -> fail ("Could not obtain the derivation of " ++ string)
+            l : ls -> do
+                let drv_path = Data.List.NonEmpty.last (l :| ls)
+                readDerivation drv_path
 
 {-| Join two `Map`s on shared keys, discarding keys which are not present in
     both `Map`s
