@@ -1,3 +1,9 @@
+1.0.16
+
+* [Accept realised store paths as input](https://github.com/Gabriel439/nix-diff/pull/47)
+  * `nix-diff` will attempt to find the corresponding derivations using
+    `nix-store --query --deriver` if you provide a realised store path as input
+
 1.0.15
 
 * [Fix non-exhaustive pattern match](https://github.com/Gabriel439/nix-diff/pull/45)
