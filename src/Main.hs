@@ -49,6 +49,9 @@ import qualified System.Process       as Process
 
 #if MIN_VERSION_base(4,9,0)
 import Control.Monad.Fail (MonadFail)
+import qualified Data.ByteString
+import qualified Data.Text.Encoding
+import qualified Data.Text.Encoding.Error
 #endif
 
 data Color = Always | Auto | Never
@@ -208,11 +211,20 @@ groupSetsByName s = Data.Map.fromList (fmap toAssoc (Data.Set.toList s))
       where
         predicate key' = buildProductName key == buildProductName key'
 
+-- | Read a file as utf-8 encoded string, replacing non-utf-8 characters
+-- with the unicode replacement character.
+-- This is necessary since derivations (and nix source code!) can in principle
+-- contain arbitrary bytes, but `nix-derivation` can only parse from 'Text'.
+readFileUtf8Lenient :: FilePath -> IO Text
+readFileUtf8Lenient file =
+    Data.Text.Encoding.decodeUtf8With Data.Text.Encoding.Error.lenientDecode
+        <$> Data.ByteString.readFile file
+
 -- | Read and parse a derivation from a file
 readDerivation :: FilePath -> Diff (Derivation FilePath Text)
 readDerivation path = do
     let string = path
-    text <- liftIO (Text.IO.readFile string)
+    text <- liftIO (readFileUtf8Lenient string)
     case Data.Attoparsec.Text.parse Nix.Derivation.parseDerivation text of
         Done _ derivation -> do
             return derivation
@@ -573,8 +585,8 @@ diffSrcs leftSrcs rightSrcs = do
                 rightExists <- liftIO (Directory.doesFileExist rightPath)
                 if leftExists && rightExists
                     then do
-                        leftText  <- liftIO (Text.IO.readFile leftPath)
-                        rightText <- liftIO (Text.IO.readFile rightPath)
+                        leftText  <- liftIO (readFileUtf8Lenient leftPath)
+                        rightText <- liftIO (readFileUtf8Lenient rightPath)
 
                         text <- diffText leftText rightText
                         echo ("    " <> text)
