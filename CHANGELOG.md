@@ -1,3 +1,7 @@
+1.0.17
+
+* [Handle `.drv` and `.nix` files that contain non-UTF8 text](https://github.com/Gabriel439/nix-diff/pull/50)
+
 1.0.16
 
 * [Accept realised store paths as input](https://github.com/Gabriel439/nix-diff/pull/47)
