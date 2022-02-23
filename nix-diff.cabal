@@ -20,7 +20,7 @@ extra-source-files:  README.md
 executable nix-diff
   main-is:             Main.hs
   build-depends:       base                 >= 4.9      && < 5
-                     , attoparsec           >= 0.13     && < 0.14
+                     , attoparsec           >= 0.13     && < 0.15
                      , bytestring           >= 0.9      && < 0.12
                      , containers           >= 0.5      && < 0.7
                      , directory                           < 1.4
