@@ -61,6 +61,7 @@ parseColor =
     Options.Applicative.option
         reader
         (   Options.Applicative.long "color"
+        <>  Options.Applicative.help ("display colors always, automatically (if terminal detected), or never")
         <>  Options.Applicative.value Auto
         <>  Options.Applicative.metavar "(always|auto|never)"
         )
