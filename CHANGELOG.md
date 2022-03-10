@@ -1,3 +1,7 @@
+1.0.18
+
+* [Document the `--color` command-line option](https://github.com/Gabriel439/nix-diff/pull/54)
+
 1.0.17
 
 * [Handle `.drv` and `.nix` files that contain non-UTF8 text](https://github.com/Gabriel439/nix-diff/pull/50)
