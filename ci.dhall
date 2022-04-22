@@ -18,12 +18,12 @@ in        haskellCi.generalCi
             matrixStepsNoHaddoc
             ( Some
                 { ghc =
-                  [ haskellCi.GHC.GHC8104
+                  [ haskellCi.GHC.GHC902
+                  , haskellCi.GHC.GHC8107
                   , haskellCi.GHC.GHC884
                   , haskellCi.GHC.GHC865
-                  , haskellCi.GHC.GHC901
                   ]
-                , cabal = [ haskellCi.Cabal.Cabal32 ]
+                , cabal = [ haskellCi.Cabal.Cabal34 ]
                 }
             )
       //  { on = [ haskellCi.Event.push, haskellCi.Event.pull_request ] }
