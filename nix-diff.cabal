@@ -19,6 +19,9 @@ extra-source-files:  README.md
 
 executable nix-diff
   main-is:             Main.hs
+  other-modules:
+    Diff
+    Render.HumanReadable
   build-depends:       base                 >= 4.9      && < 5
                      , attoparsec           >= 0.13     && < 0.15
                      , bytestring           >= 0.9      && < 0.12
