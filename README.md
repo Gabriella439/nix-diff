@@ -70,7 +70,7 @@ We can use `nix-diff` to compare the two computed derivations to determine what
 changed about our system:
 
 ```bash
-$ nix-diff /nix/store/6z9nr5pzs4j1v9mld517dmlcz61zy78z-nixos-system-nixos-18.03pre119245.5cfd049a03.drv /nix/store/k05ibijg0kknvwrgfyb7dxwjrs8qrlbj-nixos-system-nixos-18.03pre119245.5cfd049a03.drv 
+$ nix-diff /nix/store/6z9nr5pzs4j1v9mld517dmlcz61zy78z-nixos-system-nixos-18.03pre119245.5cfd049a03.drv /nix/store/k05ibijg0kknvwrgfyb7dxwjrs8qrlbj-nixos-system-nixos-18.03pre119245.5cfd049a03.drv
 ```
 
 ... which produces the following output:
@@ -83,6 +83,12 @@ It's also possible to pass store paths or links to store paths, for example:
 $ nix-build example.nix
 $ nix-diff /run/current-system ./result
 ```
+## Testing
+
+You have to have `nix-diff` in PATH to run test from `golden-tests` folder.
+You also have to be in that folder and to have nix in your system.
+
+Basically, you can run test, using `cabal exec bash -- -c "cd golden-tests; ./run-test.sh"` command.
 
 ## Development status
 
@@ -96,7 +102,7 @@ an improvement.
 
     Copyright (c) 2017 Gabriella Gonzalez
     All rights reserved.
-    
+
     Redistribution and use in source and binary forms, with or without modification,
     are permitted provided that the following conditions are met:
         * Redistributions of source code must retain the above copyright notice,
@@ -107,7 +113,7 @@ an improvement.
         * Neither the name of Gabriella Gonzalez nor the names of other contributors
           may be used to endorse or promote products derived from this software
           without specific prior written permission.
-    
+
     THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
     ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
     WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
