@@ -137,6 +137,9 @@ renderDiffHumanReadable :: DerivationDiff -> Render ()
 renderDiffHumanReadable = \case
     DerivationsAreTheSame -> pure ()
     AlreadyCompared ->  echo (explain "These two derivations have already been compared")
+    OnlyAlreadyComparedBelow {..} -> do
+      renderOutputStructure outputStructure
+      echo (explain "Skipping because only derivations that have already been compared and shown in the diff are below")
     NamesDontMatch {..} -> do
       renderOutputStructure outputStructure
       echo (explain "The derivation names do not match")
