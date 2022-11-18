@@ -2,7 +2,12 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE FlexibleContexts #-}
 module Nix.Diff.Transformations where
+
+import qualified Patience
+import Data.Generics.Uniplate.Data ( transformBi )
 
 import Nix.Diff.Types
 
@@ -55,6 +60,34 @@ foldAlreadyComparedSubTrees dd = case dd of
       inputsDiff' = transformNestedDerivationDiffs
             foldAlreadyComparedSubTrees
             inputsDiff
+
+{-| This transfomration is most usefull for
+    --json output, because it will sqash a lot of
+    `{"content":"  ","type":"Both"},{"content":"When","type":"Both"},{"content":" ","type":"Both"},{"content":"in","type":"Both"},{"content":" ","type":"Both"}`
+    into one
+    `{"content":"  When in ","type":"Both"}`
+    block.
+
+    To understand this problem clearer, see `golden-tests/expected-outputs/json`
+    and `golden-tests/expected-outputs/json-squashed`.
+
+    _Warning_: this transformation can break some parts of printing in
+    human readable mode.
+-}
+squashSourcesAndEnvsDiff :: DerivationDiff -> DerivationDiff
+squashSourcesAndEnvsDiff = transformBi
+    \(TextDiff x) -> TextDiff (squashDiff x)
+  where
+    squashDiff (Patience.Old a : Patience.Old b : xs) =
+      squashDiff (Patience.Old (a <> b) : xs)
+    squashDiff (Patience.New a : Patience.New b : xs) =
+      squashDiff (Patience.New (a <> b) : xs)
+    squashDiff (Patience.Both a _ : Patience.Both b _ : xs) =
+      let ab = a <> b in squashDiff (Patience.Both ab ab : xs)
+    squashDiff (x : xs) = x : squashDiff xs
+    squashDiff [] = []
+
+-- ** Helpers
 
 transformNestedDerivationDiffs
   :: (DerivationDiff -> DerivationDiff)

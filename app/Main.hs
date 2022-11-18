@@ -29,13 +29,15 @@ import Nix.Diff
 import Nix.Diff.Types
 import Nix.Diff.Render.HumanReadable
 import Nix.Diff.Transformations
+import Data.Foldable (Foldable(fold))
 
 data Color = Always | Auto | Never
 
 data RenderRunner = HumanReadable | JSON
 
-data TransformOptions = TransformOptions 
+data TransformOptions = TransformOptions
   { foldAlreadyCompared :: Bool
+  , squashTextDiff      :: Bool
   }
 
 parseColor :: Parser Color
@@ -87,15 +89,24 @@ parseRenderRunner = json <|> pure HumanReadable
 parseTransformOptions :: Parser TransformOptions
 parseTransformOptions = do
   foldAlreadyCompared <- parseReduceAlreadyCompared
+  squashTextDiff      <- parseSquashTextDiff
 
   pure TransformOptions{..}
   where
-    parseReduceAlreadyCompared = 
+    parseReduceAlreadyCompared =
       Options.Applicative.switch
           (   Options.Applicative.long "skip-already-compared"
           <>  Options.Applicative.help "Fold subtrees, that changed only by already compared input"
           )
-        
+    parseSquashTextDiff =
+      Options.Applicative.switch
+          (   Options.Applicative.long "squash-text-diff"
+          <>  Options.Applicative.help (fold
+                                      ["Squash text diffs into the lagest spans. It's the most usefull ",
+                                       "with json output. ",
+                                       "WARNING: can break some parts of human readable output."])
+          )
+
 data Options = Options
     { left             :: FilePath
     , right            :: FilePath
@@ -135,8 +146,9 @@ parserInfo =
         )
 
 transformDiff :: TransformOptions -> DerivationDiff -> DerivationDiff
-transformDiff TransformOptions{..} 
+transformDiff TransformOptions{..}
   = transformIf foldAlreadyCompared foldAlreadyComparedSubTrees
+  . transformIf squashTextDiff      squashSourcesAndEnvsDiff
 
 renderDiff :: RenderRunner -> RenderContext -> DerivationDiff -> IO ()
 renderDiff HumanReadable context derivation
@@ -164,6 +176,6 @@ main = do
     let status = Status Data.Set.empty
     let action = diff True left (Data.Set.singleton "out") right (Data.Set.singleton "out")
     diffTree <- Control.Monad.State.evalStateT (Control.Monad.Reader.runReaderT (unDiff action) diffContext) status
-    let diffTree' = 
+    let diffTree' =
           transformDiff transformOptions diffTree
     renderDiff renderRunner renderContext diffTree'

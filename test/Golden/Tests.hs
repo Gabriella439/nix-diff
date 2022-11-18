@@ -27,6 +27,11 @@ goldenTests simpleTd complexTd = testGroup "Golden tests"
       skipAlreadyComparedExpected
       complex_words
       (humanReadable_words . foldAlreadyComparedSubTrees)
+      
+  , goldenVsAction "JSON, squash text and envs"
+      jsonSquashedExpected
+      simple_words
+      (toJson . squashSourcesAndEnvsDiff)
   ]
   where
     toJson drv = (<> "\n") . decodeUtf8 . BS.toStrict $ (Data.Aeson.encode drv)
@@ -35,6 +40,7 @@ goldenTests simpleTd complexTd = testGroup "Golden tests"
     toHumanReadable ctx drv = runRender' (renderDiffHumanReadable drv) ctx
 
     simple_env_words = mkDTSimple (diffContextEnv Word)
+    simple_words = mkDTSimple (diffContext Word)
     complex_words = mkDTComplex (diffContext Word)
 
     mkDTSimple = makeDiffTree simpleTd
@@ -53,3 +59,6 @@ jsonExpected = "./golden-tests/expected-outputs/json"
 
 skipAlreadyComparedExpected :: FilePath
 skipAlreadyComparedExpected = "./golden-tests/expected-outputs/skip-already-compared"
+
+jsonSquashedExpected :: FilePath
+jsonSquashedExpected = "./golden-tests/expected-outputs/json-squashed"
