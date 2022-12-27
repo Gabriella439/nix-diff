@@ -27,6 +27,7 @@ import Nix.Derivation (Derivation, DerivationOutput)
 import qualified Control.Monad.Reader
 import qualified Data.Attoparsec.Text
 import qualified Data.Char            as Char
+import qualified Data.List            as List
 import qualified Data.List.NonEmpty
 import qualified Data.Map
 import qualified Data.Set
@@ -233,7 +234,8 @@ readDerivation path = do
 -- (.drv) or a realized path, in which case the corresponding derivation is
 -- queried.
 readInput :: FilePath -> Diff (Derivation FilePath Text)
-readInput path =
+readInput pathAndMaybeOutput = do
+    let (path, _) = List.break (== '!') pathAndMaybeOutput
     if FilePath.isExtensionOf ".drv" path
     then readDerivation path
     else do
