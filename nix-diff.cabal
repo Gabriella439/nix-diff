@@ -17,13 +17,14 @@ cabal-version:       >= 1.10
 extra-source-files:  README.md
                      CHANGELOG.md
 
-executable nix-diff
-  main-is:             Main.hs
-  other-modules:
-    Diff
-    Render.HumanReadable
+library
+  exposed-modules:
+    Nix.Diff
+    Nix.Diff.Types
+    Nix.Diff.Render.HumanReadable
   build-depends:       base                 >= 4.9      && < 5
                      , attoparsec           >= 0.13     && < 0.15
+                     , aeson
                      , bytestring           >= 0.9      && < 0.12
                      , containers           >= 0.5      && < 0.7
                      , directory                           < 1.4
@@ -32,10 +33,50 @@ executable nix-diff
                      , optparse-applicative >= 0.14.0.0 && < 0.18
                      , patience             >= 0.3      && < 0.4
                      , text                 >= 1.2      && < 1.3
-                     , unix                                < 2.8
                      , vector               >= 0.12     && < 0.13
                      , process                             < 1.7
                      , filepath                            < 1.5
+                     , QuickCheck                          < 2.15
+                     , quickcheck-instances                < 3.29
+                     , generic-arbitrary                   < 1.1
   hs-source-dirs:      src
+  default-language:    Haskell2010
+  ghc-options:         -Wall
+
+executable nix-diff
+  main-is:             Main.hs
+
+  build-depends:       base
+                     , nix-diff
+                     , aeson
+                     , bytestring
+                     , optparse-applicative >= 0.14.0.0 && < 0.17
+                     , text
+                     , unix                                < 2.8
+                     , containers
+                     , mtl
+  hs-source-dirs:      app
+  default-language:    Haskell2010
+  ghc-options:         -Wall
+
+test-suite nix-diff-test
+  main-is:             Main.hs
+
+  type:                exitcode-stdio-1.0
+
+  build-depends:       base
+                     , nix-diff
+                     , aeson
+                     , bytestring
+                     , text
+                     , containers
+                     , mtl
+                     , typed-process     < 0.2.11
+                     , tasty             < 1.5
+                     , tasty-quickcheck  < 0.11
+                     , tasty-silver      < 3.4
+
+  hs-source-dirs:      test
+
   default-language:    Haskell2010
   ghc-options:         -Wall

@@ -11,7 +11,6 @@
 module Main where
 
 import Control.Applicative ((<|>))
-import Data.Monoid ((<>))
 import Data.Text (Text)
 import Options.Applicative (Parser, ParserInfo)
 
@@ -22,13 +21,17 @@ import qualified GHC.IO.Encoding
 import qualified Options.Applicative
 import qualified System.Posix.IO
 import qualified System.Posix.Terminal
+import qualified Data.Aeson
+import qualified Data.ByteString.Lazy.Char8
+import qualified Data.Text.IO as Text.IO
 
-import Diff
-import Render.HumanReadable
+import Nix.Diff
+import Nix.Diff.Types
+import Nix.Diff.Render.HumanReadable
 
 data Color = Always | Auto | Never
 
-data RenderRunner = HumanReadable
+data RenderRunner = HumanReadable | JSON
 
 parseColor :: Parser Color
 parseColor =
@@ -68,12 +71,22 @@ parseEnvironment =
         <>  Options.Applicative.help "Force display of environment differences"
         )
 
+parseRenderRunner :: Parser RenderRunner
+parseRenderRunner = json <|> pure HumanReadable
+  where
+    json = Options.Applicative.flag' JSON
+      (  Options.Applicative.long "json"
+      <> Options.Applicative.help "Print output in JSON format"
+      )
+
+
 data Options = Options
     { left        :: FilePath
     , right       :: FilePath
     , color       :: Color
     , orientation :: Orientation
     , environment :: Bool
+    , renderRunner :: RenderRunner
     }
 
 parseOptions :: Parser Options
@@ -83,8 +96,9 @@ parseOptions = do
     color       <- parseColor
     orientation <- parseLineOriented
     environment <- parseEnvironment
+    renderRunner <- parseRenderRunner
 
-    return (Options { left, right, color, orientation, environment })
+    return (Options { .. })
   where
     parseFilePath metavar = do
         Options.Applicative.strArgument
@@ -104,13 +118,14 @@ parserInfo =
 
 renderDiff :: RenderRunner -> RenderContext -> DerivationDiff -> IO ()
 renderDiff HumanReadable context derivation
-  = Control.Monad.Reader.runReaderT (unRender (renderDiffHumanReadable derivation))  context
+  = Text.IO.putStr $ runRender' (renderDiffHumanReadable derivation) context
+renderDiff JSON _ derivation = Data.ByteString.Lazy.Char8.putStrLn (Data.Aeson.encode derivation)
 
 main :: IO ()
 main = do
     GHC.IO.Encoding.setLocaleEncoding GHC.IO.Encoding.utf8
 
-    Options { left, right, color, orientation, environment } <- Options.Applicative.execParser parserInfo
+    Options { .. } <- Options.Applicative.execParser parserInfo
 
     tty <- case color of
         Never -> do
@@ -124,7 +139,6 @@ main = do
     let indent = 0
     let diffContext = DiffContext {..}
     let renderContext = RenderContext {..}
-    let renderRunner = HumanReadable
     let status = Status Data.Set.empty
     let action = diff True left (Data.Set.singleton "out") right (Data.Set.singleton "out")
     diffTree <- Control.Monad.State.evalStateT (Control.Monad.Reader.runReaderT (unDiff action) diffContext) status
