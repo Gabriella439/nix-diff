@@ -15,8 +15,15 @@
               pkgsNew.haskellPackages.nix-diff;
 
           haskellPackages = pkgsOld.haskellPackages.override (old: {
-            overrides = pkgsNew.haskell.lib.packageSourceOverrides {
-              nix-diff = ./.;
+            overrides = self: super: {
+              nix-diff = 
+                # There are quick check and golden tests.
+                # Quick check tests require random source to work.
+                # Golden tests require write access to the /nix/var
+                # and read access to the test data into /nix/store
+                # So we can't run these tests in build time
+                pkgsNew.haskell.lib.dontCheck 
+                (self.callCabal2nix "nix-diff" ./. {});
             };
           });
         };
