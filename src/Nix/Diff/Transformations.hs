@@ -61,7 +61,7 @@ foldAlreadyComparedSubTrees dd = case dd of
             foldAlreadyComparedSubTrees
             inputsDiff
 
-{-| This transfomration is most usefull for
+{-| This transformation is most useful for
     --json output, because it will sqash a lot of
     `{"content":"  ","type":"Both"},{"content":"When","type":"Both"},{"content":" ","type":"Both"},{"content":"in","type":"Both"},{"content":" ","type":"Both"}`
     into one
