@@ -94,8 +94,9 @@ type Argument = Text
 data DerivationDiff
   = DerivationsAreTheSame
   | AlreadyCompared
-  | NamesDontMatch   { outputStructure :: Changed OutputStructure}
-  | OutputsDontMatch { outputStructure :: Changed OutputStructure}
+  | OnlyAlreadyComparedBelow { outputStructure :: Changed OutputStructure}
+  | NamesDontMatch           { outputStructure :: Changed OutputStructure}
+  | OutputsDontMatch         { outputStructure :: Changed OutputStructure}
   | DerivationDiff
       { outputStructure :: Changed OutputStructure
       , outputsDiff     :: OutputsDiff

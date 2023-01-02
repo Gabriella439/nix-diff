@@ -28,10 +28,15 @@ import qualified Data.Text.IO as Text.IO
 import Nix.Diff
 import Nix.Diff.Types
 import Nix.Diff.Render.HumanReadable
+import Nix.Diff.Transformations
 
 data Color = Always | Auto | Never
 
 data RenderRunner = HumanReadable | JSON
+
+data TransformOptions = TransformOptions 
+  { foldAlreadyCompared :: Bool
+  }
 
 parseColor :: Parser Color
 parseColor =
@@ -79,14 +84,26 @@ parseRenderRunner = json <|> pure HumanReadable
       <> Options.Applicative.help "Print output in JSON format"
       )
 
+parseTransformOptions :: Parser TransformOptions
+parseTransformOptions = do
+  foldAlreadyCompared <- parseReduceAlreadyCompared
 
+  pure TransformOptions{..}
+  where
+    parseReduceAlreadyCompared = 
+      Options.Applicative.switch
+          (   Options.Applicative.long "skip-already-compared"
+          <>  Options.Applicative.help "Fold subtrees, that changed only by already compared input"
+          )
+        
 data Options = Options
-    { left        :: FilePath
-    , right       :: FilePath
-    , color       :: Color
-    , orientation :: Orientation
-    , environment :: Bool
-    , renderRunner :: RenderRunner
+    { left             :: FilePath
+    , right            :: FilePath
+    , color            :: Color
+    , orientation      :: Orientation
+    , environment      :: Bool
+    , renderRunner     :: RenderRunner
+    , transformOptions :: TransformOptions
     }
 
 parseOptions :: Parser Options
@@ -97,6 +114,7 @@ parseOptions = do
     orientation <- parseLineOriented
     environment <- parseEnvironment
     renderRunner <- parseRenderRunner
+    transformOptions <- parseTransformOptions
 
     return (Options { .. })
   where
@@ -115,6 +133,10 @@ parserInfo =
         (   Options.Applicative.fullDesc
         <>  Options.Applicative.header "Explain why two derivations differ"
         )
+
+transformDiff :: TransformOptions -> DerivationDiff -> DerivationDiff
+transformDiff TransformOptions{..} 
+  = transformIf foldAlreadyCompared foldAlreadyComparedSubTrees
 
 renderDiff :: RenderRunner -> RenderContext -> DerivationDiff -> IO ()
 renderDiff HumanReadable context derivation
@@ -142,4 +164,6 @@ main = do
     let status = Status Data.Set.empty
     let action = diff True left (Data.Set.singleton "out") right (Data.Set.singleton "out")
     diffTree <- Control.Monad.State.evalStateT (Control.Monad.Reader.runReaderT (unDiff action) diffContext) status
-    renderDiff renderRunner renderContext diffTree
+    let diffTree' = 
+          transformDiff transformOptions diffTree
+    renderDiff renderRunner renderContext diffTree'

@@ -21,6 +21,7 @@ library
   exposed-modules:
     Nix.Diff
     Nix.Diff.Types
+    Nix.Diff.Transformations
     Nix.Diff.Render.HumanReadable
   build-depends:       base                 >= 4.9      && < 5
                      , attoparsec           >= 0.13     && < 0.15
@@ -61,6 +62,11 @@ executable nix-diff
 
 test-suite nix-diff-test
   main-is:             Main.hs
+
+  other-modules:
+    Properties
+    Golden.Tests
+    Golden.Utils
 
   type:                exitcode-stdio-1.0
 
