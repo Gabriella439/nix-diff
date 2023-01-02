@@ -6,6 +6,10 @@
 {-# LANGUAGE DeriveTraversable     #-}
 {-# LANGUAGE BlockArguments        #-}
 {-# LANGUAGE DerivingVia           #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Nix.Diff.Types where
 
@@ -25,6 +29,7 @@ import Data.Aeson.Types
 import Test.QuickCheck
 import Test.QuickCheck.Instances ()
 import Test.QuickCheck.Arbitrary.Generic (GenericArbitrary(..))
+import Data.Data (Data)
 
 {- ** NOTE: Lawless instances
    All the Arbitrary instances here are written to
@@ -37,7 +42,7 @@ import Test.QuickCheck.Arbitrary.Generic (GenericArbitrary(..))
 -}
 
 data Changed a = Changed { before :: a, now :: a }
-  deriving stock (Eq, Show, Functor, Foldable, Traversable, Generic)
+  deriving stock (Eq, Show, Functor, Foldable, Traversable, Generic, Data)
 
 instance (Arbitrary a) => Arbitrary (Changed a) where
   arbitrary = Changed <$> arbitrary <*> arbitrary
@@ -50,31 +55,13 @@ instance FromJSON a => FromJSON (Changed a) where
   parseJSON = changedFromJSON parseJSON
 
 newtype TextDiff = TextDiff {unTextDiff :: [Patience.Item Text]}
-  deriving stock (Eq, Show)
+  deriving stock (Eq, Show, Data)
 
 instance Arbitrary TextDiff where
   arbitrary = TextDiff <$> listOf arbitraryItem
 
 instance ToJSON TextDiff where
-  toJSON = listValue itemToJSON . squashDiff . unTextDiff
-    where
-      -- TODO: think about longest difference spans,
-      -- instead of printing each line/word/character as one item.
-      -- Perhaps, this squashing should be in Diff module,
-      -- Because trees before and after squashing would be printed
-      -- in a different way by Render.HumanReadable.
-      --
-      -- Don't forget to update Arbitrary instance for that type.
-
-      -- squashDiff (Patience.Old a : Patience.Old b : xs) =
-      --   squashDiff (Patience.Old (a <> b) : xs)
-      -- squashDiff (Patience.New a : Patience.New b : xs) =
-      --   squashDiff (Patience.New (a <> b) : xs)
-      -- squashDiff (Patience.Both a _ : Patience.Both b _ : xs) =
-      --   let ab = a <> b in squashDiff (Patience.Both ab ab : xs)
-      -- squashDiff (x: xs) = x : squashDiff xs
-      -- squashDiff [] = []
-      squashDiff = id
+  toJSON = listValue itemToJSON . unTextDiff
 
 instance FromJSON TextDiff where
   parseJSON v = TextDiff <$> (traverse itemFromJSON =<< parseJSON v)
@@ -111,7 +98,7 @@ data DerivationDiff
       , envDiff         :: Maybe EnvironmentDiff
         -- ^ Will be Nothing, if environment comparison is skipped
       }
-  deriving stock (Eq, Show, Generic)
+  deriving stock (Eq, Show, Generic, Data)
   deriving anyclass (ToJSON, FromJSON)
   deriving Arbitrary via GenericArbitrary DerivationDiff
 
@@ -121,7 +108,7 @@ data OutputStructure = OutputStructure
   { derivationPath :: FilePath
   , derivationOutputs :: Set Text
   }
-  deriving stock (Eq, Show, Generic)
+  deriving stock (Eq, Show, Generic, Data)
   deriving anyclass (ToJSON, FromJSON)
   deriving Arbitrary via GenericArbitrary OutputStructure
 
@@ -136,7 +123,9 @@ data OutputsDiff = OutputsDiff
     -- ^ Difference of outputs with the same name.
     --   Will be empty, if all outputs are equal.
   }
-  deriving stock (Eq, Show)
+  deriving stock (Eq, Show, Data)
+
+deriving instance Data (DerivationOutput FilePath Text)
 
 instance Arbitrary OutputsDiff where
   arbitrary = OutputsDiff <$> arbitraryExtraOutputs  <*> arbitrary
@@ -184,7 +173,7 @@ data OutputDiff = OutputDiff
   { outputName :: Text
   , hashDifference :: Changed OutputHash
   }
-  deriving stock (Eq, Show, Generic)
+  deriving stock (Eq, Show, Generic, Data)
   deriving anyclass (ToJSON, FromJSON)
   deriving Arbitrary via GenericArbitrary OutputDiff
 
@@ -193,7 +182,7 @@ data OutputDiff = OutputDiff
 newtype ArgumentsDiff = ArgumentsDiff
   { unArgumetsDiff :: NonEmpty (Patience.Item Argument)
   }
-  deriving stock (Eq, Show)
+  deriving stock (Eq, Show, Data)
 
 instance Arbitrary ArgumentsDiff where
   arbitrary = ArgumentsDiff . NonEmpty.fromList <$> listOf1 arbitraryItem
@@ -211,7 +200,7 @@ data SourcesDiff = SourcesDiff
     -- ^ Will be Nothing, if there is no extra source names
   , srcFilesDiff :: [SourceFileDiff]
   }
-  deriving stock (Eq, Show, Generic)
+  deriving stock (Eq, Show, Generic, Data)
   deriving anyclass (ToJSON, FromJSON)
   deriving Arbitrary via GenericArbitrary SourcesDiff
 
@@ -225,7 +214,7 @@ data SourceFileDiff
       { srcName :: Text
       , srcFileDiff :: Changed [FilePath]
       }
-  deriving stock (Eq, Show, Generic)
+  deriving stock (Eq, Show, Generic, Data)
   deriving anyclass (ToJSON, FromJSON)
   deriving Arbitrary via GenericArbitrary SourceFileDiff
 
@@ -236,7 +225,7 @@ data InputsDiff = InputsDiff
     -- ^ Will be Nothing, if there is no extra input names
   , inputDerivationDiffs :: [InputDerivationsDiff]
   }
-  deriving stock (Eq, Show, Generic)
+  deriving stock (Eq, Show, Generic, Data)
   deriving anyclass (ToJSON, FromJSON)
   deriving Arbitrary via GenericArbitrary InputsDiff
 
@@ -249,7 +238,7 @@ data InputDerivationsDiff
       { drvName :: Text
       , extraPartsDiff :: Changed (Map FilePath (Set Text))
       }
-  deriving stock (Eq, Show, Generic)
+  deriving stock (Eq, Show, Generic, Data)
   deriving anyclass (ToJSON, FromJSON)
   deriving Arbitrary via GenericArbitrary InputDerivationsDiff
 
@@ -261,7 +250,7 @@ data EnvironmentDiff
       { extraEnvDiff :: Changed (Map Text Text)
       , envContentDiff :: [EnvVarDiff]
       }
-  deriving stock (Eq, Show, Generic)
+  deriving stock (Eq, Show, Generic, Data)
   deriving anyclass (ToJSON, FromJSON)
   deriving Arbitrary via GenericArbitrary EnvironmentDiff
 
@@ -269,7 +258,7 @@ data EnvVarDiff = EnvVarDiff
   { envKey :: Text
   , envValueDiff :: TextDiff
   }
-  deriving stock (Eq, Show, Generic)
+  deriving stock (Eq, Show, Generic, Data)
   deriving anyclass (ToJSON, FromJSON)
   deriving Arbitrary via GenericArbitrary EnvVarDiff
 
