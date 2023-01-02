@@ -8,12 +8,11 @@
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE RecordWildCards            #-}
 
-module Render.HumanReadable where
+module Nix.Diff.Render.HumanReadable where
 
 import Control.Monad (forM_)
-import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Monad.Reader (MonadReader, ReaderT, ask, local)
-import Data.Monoid ((<>))
+import Control.Monad.Reader (MonadReader, ReaderT (runReaderT), ask, local)
+import Control.Monad.Writer(MonadWriter, Writer, tell, runWriter)
 import Data.Set (Set)
 import Data.Text (Text)
 import Numeric.Natural (Natural)
@@ -22,14 +21,14 @@ import qualified Control.Monad.Reader
 import qualified Data.Map
 import qualified Data.Set
 import qualified Data.Text            as Text
-import qualified Data.Text.IO         as Text.IO
 import qualified Patience
 
-#if MIN_VERSION_base(4,9,0)
+#if !MIN_VERSION_base(4,15,1)
 import Control.Monad.Fail (MonadFail)
 #endif
 
-import Diff
+import Nix.Diff
+import Nix.Diff.Types
 
 
 data RenderContext = RenderContext
@@ -38,23 +37,28 @@ data RenderContext = RenderContext
   , indent      :: Natural
   }
 
-newtype Render a = Render { unRender :: ReaderT RenderContext IO a}
+newtype Render a = Render { unRender :: ReaderT RenderContext (Writer Text) a}
     deriving
     ( Functor
     , Applicative
     , Monad
     , MonadReader RenderContext
-    , MonadIO
-#if MIN_VERSION_base(4,9,0)
-    , MonadFail
-#endif
+    , MonadWriter Text
     )
+
+runRender :: Render a -> RenderContext ->  (a, Text)
+runRender render rc = runWriter $  runReaderT (unRender render) rc
+
+runRender' :: Render () -> RenderContext -> Text
+runRender' render = snd . runRender render
 
 echo :: Text -> Render ()
 echo text = do
     RenderContext { indent } <- ask
     let n = fromIntegral indent
-    liftIO (Text.IO.putStrLn (Text.replicate n " " <> text))
+    tellLn (Text.replicate n " " <> text)
+  where
+    tellLn line = tell (line <> "\n")
 
 indented :: Natural -> Render a -> Render a
 indented n = local adapt
@@ -151,7 +155,7 @@ renderDiffHumanReadable = \case
 
   where
     renderOutputStructure os =
-      renderWith os \(sign, (path, outputs)) -> do
+      renderWith os \(sign, (OutputStructure path outputs)) -> do
         echo (sign (Text.pack path <> renderOutputs outputs))
 
     renderOutputsDiff OutputsDiff{..} = do
@@ -181,7 +185,7 @@ renderDiffHumanReadable = \case
           echo ("    " <> sign builder)
 
     renderArgsDiff mad =
-      ifExist mad \ad -> do
+      ifExist mad \(ArgumentsDiff ad) -> do
         RenderContext { tty } <- ask
         echo (explain "The arguments do not match")
         let renderDiff (Patience.Old arg) =
@@ -208,7 +212,7 @@ renderDiffHumanReadable = \case
         echo ("    " <> text)
     renderSrcFileDiff SomeSourceFileDiff{..} = do
       echo (explain ("The input sources named `" <> srcName <> "` differ"))
-      renderWith srcFilesDiff \(sign, paths) -> do
+      renderWith srcFileDiff \(sign, paths) -> do
         forM_ paths \path -> do
             echo ("    " <>  sign (Text.pack path))
 
@@ -244,8 +248,8 @@ renderDiffHumanReadable = \case
         text <- renderText envValueDiff
         echo ("    " <> envKey <> "=" <> text)
 
-    renderText :: [Patience.Item Text] -> Render Text
-    renderText chunks = do
+    renderText :: TextDiff -> Render Text
+    renderText (TextDiff chunks) = do
       RenderContext{ indent, orientation, tty } <- ask
 
       let n = fromIntegral indent

@@ -1,0 +1,4 @@
+packages: ./*.cabal
+
+package nix-diff
+  test-show-details: streaming

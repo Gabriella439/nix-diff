@@ -85,10 +85,9 @@ $ nix-diff /run/current-system ./result
 ```
 ## Testing
 
-You have to have `nix-diff` in PATH to run test from `golden-tests` folder.
-You also have to be in that folder and to have nix in your system.
+Run tests, using `cabal test` command.
 
-Basically, you can run test, using `cabal exec bash -- -c "cd golden-tests; ./run-test.sh"` command.
+You need to have nix installed in your PC.
 
 ## Development status
 
