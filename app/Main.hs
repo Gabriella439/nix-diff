@@ -102,7 +102,7 @@ parseTransformOptions = do
       Options.Applicative.switch
           (   Options.Applicative.long "squash-text-diff"
           <>  Options.Applicative.help (fold
-                                      ["Squash text diffs into the lagest spans. It's the most usefull ",
+                                      ["Squash text diffs into the lagest spans. It's most useful ",
                                        "with json output. ",
                                        "WARNING: can break some parts of human readable output."])
           )
