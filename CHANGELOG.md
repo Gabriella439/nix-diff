@@ -1,3 +1,19 @@
+1.0.19
+
+* [New Haskell API](https://github.com/Gabriella439/nix-diff/pull/60)
+  * Previously `nix-diff` only had a command-line API, but now there is a
+    Haskell API available under the `Nix.Diff` module hierarchy
+* [Machine-readable output](https://github.com/Gabriella439/nix-diff/pull/61)
+  * `nix-diff` now supports a `--json` flag for machine-readable JSON output
+* [New `--skip-already-compared` command-line option](https://github.com/Gabriella439/nix-diff/pull/69)
+  * This compresses a sub-tree of the diff if the leaves have already been
+    compared
+* [New `--squash-text-diff` command-line option](https://github.com/Gabriella439/nix-diff/pull/70)
+  * This compresses textual diffs into larger spans when possible
+* [Ignore `!${OUTPUT}`](https://github.com/Gabriella439/nix-diff/pull/66)
+  * `nix-diff` will now strip everything after `!` from a derivation argument
+    so that arguments like `/nix/store/…!bin` no longer fail
+
 1.0.18
 
 * [Document the `--color` command-line option](https://github.com/Gabriel439/nix-diff/pull/54)
