@@ -38,11 +38,19 @@ jobs:
         cabal:
         - '3.4'
         ghc:
+        - '9.4.4'
+        - '9.2.5'
         - '9.0.2'
         - '8.10.7'
-        - '8.8.4'
-        - '8.6.5'
+  build-nix:
+    "runs-on": "ubuntu-latest"
+    steps:
+    - uses: "actions/checkout@v3"
+    - uses: cachix/install-nix-action@v17
+      with:
+        github_access_token: ${{ secrets.GITHUB_TOKEN }}
+    - name: check it build with nix
+      run: nix build
 name: Haskell CI
 'on':
-- push
 - pull_request

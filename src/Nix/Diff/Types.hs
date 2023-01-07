@@ -6,10 +6,10 @@
 {-# LANGUAGE DeriveTraversable     #-}
 {-# LANGUAGE BlockArguments        #-}
 {-# LANGUAGE DerivingVia           #-}
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# OPTIONS_GHC -Wno-orphans #-}
+{-# LANGUAGE DeriveDataTypeable    #-}
+{-# LANGUAGE StandaloneDeriving    #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# OPTIONS_GHC -Wno-orphans -fconstraint-solver-iterations=0 #-}
 
 module Nix.Diff.Types where
 

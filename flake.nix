@@ -1,5 +1,5 @@
 { inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-22.11";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
     utils.url = "github:numtide/flake-utils";
   };
@@ -16,13 +16,13 @@
 
           haskellPackages = pkgsOld.haskellPackages.override (old: {
             overrides = self: super: {
-              nix-diff = 
+              nix-diff =
                 # There are quick check and golden tests.
                 # Quick check tests require random source to work.
                 # Golden tests require write access to the /nix/var
                 # and read access to the test data into /nix/store
                 # So we can't run these tests in build time
-                pkgsNew.haskell.lib.dontCheck 
+                pkgsNew.haskell.lib.dontCheck
                 (self.callCabal2nix "nix-diff" ./. {});
             };
           });
