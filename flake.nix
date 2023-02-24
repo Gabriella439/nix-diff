@@ -23,7 +23,7 @@
               # and read access to the test data into /nix/store
               # So we can't run these tests in build time
               pkgsNew.haskell.lib.dontCheck
-                (self.callCabal2nix "nix-diff" ./. { });
+                (self.callPackage ./nix-diff.nix { });
           };
         });
       };
