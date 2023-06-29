@@ -6,6 +6,7 @@
 {-# LANGUAGE NamedFieldPuns             #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE RecordWildCards            #-}
+{-# LANGUAGE TupleSections #-}
 
 module Nix.Diff where
 
@@ -24,22 +25,26 @@ import Nix.Derivation (Derivation, DerivationOutput)
 
 import qualified Control.Monad.Reader
 import qualified Data.Attoparsec.Text
+import qualified Data.Bifunctor            as Bifunctor
 import qualified Data.ByteString
-import qualified Data.Char            as Char
-import qualified Data.List            as List
+import qualified Data.Char                 as Char
+import qualified Data.Containers.ListUtils as ListUtils
+import qualified Data.List                 as List
 import qualified Data.List.NonEmpty
 import qualified Data.Map
+import qualified Data.Monoid               as Monoid
+import qualified Data.Ord
 import qualified Data.Set
-import qualified Data.String          as String
-import qualified Data.Text            as Text
+import qualified Data.String               as String
+import qualified Data.Text                 as Text
 import qualified Data.Text.Encoding
 import qualified Data.Text.Encoding.Error
 import qualified Data.Vector
 import qualified Nix.Derivation
 import qualified Patience
-import qualified System.Directory     as Directory
-import qualified System.FilePath      as FilePath
-import qualified System.Process       as Process
+import qualified System.Directory          as Directory
+import qualified System.FilePath           as FilePath
+import qualified System.Process            as Process
 
 #if !MIN_VERSION_base(4,15,1)
 import Control.Monad.Fail (MonadFail)
@@ -206,11 +211,11 @@ getGroupedDiff oldList newList = go $ Patience.diff oldList newList
 diffOutput
     :: Text
     -- ^ Output name
-    -> (DerivationOutput FilePath Text)
+    -> DerivationOutput FilePath Text
     -- ^ Left derivation outputs
-    -> (DerivationOutput FilePath Text)
+    -> DerivationOutput FilePath Text
     -- ^ Right derivation outputs
-    -> (Maybe OutputDiff)
+    -> Maybe OutputDiff
 diffOutput outputName leftOutput rightOutput = do
     -- We deliberately do not include output paths or hashes in the diff since
     -- we already expect them to differ if the inputs differ.  Instead, we focus
@@ -378,7 +383,7 @@ diffSrcs leftSrcs rightSrcs = do
     let leftExtraNames  = Data.Set.difference leftNames  rightNames
     let rightExtraNames = Data.Set.difference rightNames leftNames
 
-    let extraSrcNames = if (leftNames /= rightNames)
+    let extraSrcNames = if leftNames /= rightNames
         then Just (Changed leftExtraNames rightExtraNames)
         else Nothing
 
@@ -481,33 +486,62 @@ diff topLevel leftPath leftOutputs rightPath rightOutputs = do
             let leftExtraNames  = Data.Set.difference leftNames  rightNames
             let rightExtraNames = Data.Set.difference rightNames leftNames
 
-            let inputExtraNames = if (leftNames /= rightNames)
+            let inputExtraNames = if leftNames /= rightNames
                 then Just (Changed leftExtraNames rightExtraNames)
                 else Nothing
 
             let assocs = Data.Map.toList (innerJoin leftInputs rightInputs)
-            (descended, mInputsDiff) <- unzip <$> forM assocs \(inputName, (leftPaths, rightPaths)) -> do
+
+            -- TODO: I have the impression this can be expressed better
+            (descended, inputDerivationDiffs') <- sequence <$> forM assocs \(inputName, (leftPaths, rightPaths)) -> do
                 let leftExtraPaths =
                         Data.Map.difference leftPaths  rightPaths
                 let rightExtraPaths =
                         Data.Map.difference rightPaths leftPaths
-                case (Data.Map.toList leftExtraPaths, Data.Map.toList rightExtraPaths) of
-                    _   | leftPaths == rightPaths -> do
-                        return (False, Nothing)
-                    ([(leftPath', leftOutputs')], [(rightPath', rightOutputs')])
-                        | leftOutputs' == rightOutputs' -> do
-                        drvDiff <- diff False leftPath' leftOutputs' rightPath' rightOutputs'
-                        return (True, Just (OneDerivationDiff inputName drvDiff))
-                    _ -> do
-                        let extraPartsDiff = Changed leftExtraPaths rightExtraPaths
-                        return (False, Just (SomeDerivationsDiff inputName extraPartsDiff))
 
-            let inputDerivationDiffs = catMaybes mInputsDiff
-            let inputsDiff = InputsDiff {..}
+                if leftPaths == rightPaths
+                  then return (Monoid.Any False, [])
+                  else case (Data.Map.toList leftExtraPaths, Data.Map.toList rightExtraPaths) of
+                      ([(leftPath', leftOutputs')], [(rightPath', rightOutputs')])
+                        | leftOutputs' == rightOutputs' -> do
+                          drvDiff <- diff False leftPath' leftOutputs' rightPath' rightOutputs'
+                          return (Monoid.Any True, [OneDerivationDiff inputName drvDiff])
+
+                      (leftExtraPaths', rightExtraPaths')
+                        | length leftExtraPaths' == length rightExtraPaths'
+                        , True -- TODO: put this under a flag
+                        -> do
+                          -- FIXME: we are reading these derivations twice
+                          lep <- traverse (\(fp, outs) -> ((fp, outs),) . Data.Map.keys . Nix.Derivation.inputDrvs <$> readInput fp) leftExtraPaths'
+                          rep <- traverse (\(fp, outs) -> ((fp, outs),) . Data.Map.keys . Nix.Derivation.inputDrvs <$> readInput fp) rightExtraPaths'
+                          -- TODO: this should be factored out somewhere
+                          let allNames = Data.Vector.fromList $ ListUtils.nubOrd $ concatMap snd $ lep ++ rep
+                              vzero = Data.Vector.map (const 0) allNames
+                              vadd = Data.Vector.zipWith (+)
+                              vsum = List.foldl' vadd vzero
+                              vabsdiff l r = Data.Vector.sum $ Data.Vector.zipWith (\x y -> abs (x - y)) l r
+                              lepX = Bifunctor.second (vsum . map (\t -> Data.Vector.map (\t' -> if t == t' then 1 :: Int else 0) allNames)) <$> lep
+                              repX = Bifunctor.second (vsum . map (\t -> Data.Vector.map (\t' -> if t == t' then 1 :: Int else 0) allNames)) <$> rep
+                              (pairs, _) = foldr (\(lfp, x) (matched, rest) ->
+                                    let (rfp, y) = List.minimumBy (Data.Ord.comparing (vabsdiff x . snd)) rest
+                                    in ((lfp, rfp): matched, List.delete (rfp, y) rest)
+                                ) ([], repX) lepX
+
+                          z <- traverse (uncurry $ \(leftPath', leftOutputs') (rightPath', rightOutputs') ->
+                                OneDerivationDiff inputName <$> diff False leftPath' leftOutputs' rightPath' rightOutputs')
+                               pairs
+
+                          return (Monoid.Any True, z)
+
+                      _ -> do
+                        let extraPartsDiff = Changed leftExtraPaths rightExtraPaths
+                        return (Monoid.Any False, [SomeDerivationsDiff inputName extraPartsDiff])
+
+            let inputsDiff = InputsDiff {inputExtraNames, inputDerivationDiffs = concat inputDerivationDiffs'}
 
             DiffContext { environment } <- ask
 
-            envDiff <- if or descended && not environment
+            envDiff <- if Monoid.getAny descended && not environment
                 then return Nothing
                 else do
                   let leftEnv  = Nix.Derivation.env leftDerivation
@@ -515,4 +549,5 @@ diff topLevel leftPath leftOutputs rightPath rightOutputs = do
                   let leftOutNames  = Data.Map.keysSet leftOuts
                   let rightOutNames = Data.Map.keysSet rightOuts
                   Just <$> diffEnv leftOutNames rightOutNames leftEnv rightEnv
+
             pure DerivationDiff{..}
