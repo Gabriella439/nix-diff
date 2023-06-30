@@ -33,7 +33,6 @@ import qualified Data.List                 as List
 import qualified Data.List.NonEmpty
 import qualified Data.Map
 import qualified Data.Monoid               as Monoid
-import qualified Data.Ord
 import qualified Data.Set
 import qualified Data.String               as String
 import qualified Data.Text                 as Text
@@ -51,6 +50,8 @@ import Control.Monad.Fail (MonadFail)
 #endif
 
 import Nix.Diff.Types
+import Data.Foldable (for_)
+import Data.Ord (comparing)
 
 newtype Status = Status { visited :: Set Diffed }
 
@@ -509,25 +510,46 @@ diff topLevel leftPath leftOutputs rightPath rightOutputs = do
 
                       (leftExtraPaths', rightExtraPaths')
                         | length leftExtraPaths' == length rightExtraPaths'
-                        , True -- TODO: put this under a flag
                         -> do
+                          -- liftIO $ putStrLn $ unlines [ "trying to match", show leftExtraPaths', "with", show rightExtraPaths' ]
                           -- FIXME: we are reading these derivations twice
                           lep <- traverse (\(fp, outs) -> ((fp, outs),) . Data.Map.keys . Nix.Derivation.inputDrvs <$> readInput fp) leftExtraPaths'
                           rep <- traverse (\(fp, outs) -> ((fp, outs),) . Data.Map.keys . Nix.Derivation.inputDrvs <$> readInput fp) rightExtraPaths'
                           -- TODO: this should be factored out somewhere
                           let allNames = Data.Vector.fromList $ ListUtils.nubOrd $ concatMap snd $ lep ++ rep
-                              vzero = Data.Vector.map (const 0) allNames
-                              vadd = Data.Vector.zipWith (+)
-                              vsum = List.foldl' vadd vzero
+                              -- vzero = Data.Vector.map (const 0) allNames
+                              -- vadd = Data.Vector.zipWith (+)
+                              -- vsum = List.foldl' vadd vzero
                               vabsdiff l r = Data.Vector.sum $ Data.Vector.zipWith (\x y -> abs (x - y)) l r
-                              lepX = Bifunctor.second (vsum . map (\t -> Data.Vector.map (\t' -> if t == t' then 1 :: Int else 0) allNames)) <$> lep
-                              repX = Bifunctor.second (vsum . map (\t -> Data.Vector.map (\t' -> if t == t' then 1 :: Int else 0) allNames)) <$> rep
-                              (pairs, _) = foldr (\(lfp, x) (matched, rest) ->
-                                    let (rfp, y) = List.minimumBy (Data.Ord.comparing (vabsdiff x . snd)) rest
-                                    in ((lfp, rfp): matched, List.delete (rfp, y) rest)
-                                ) ([], repX) lepX
+                              lepX = Bifunctor.second (\fps -> Data.Vector.map (fromEnum . (`elem` fps)) allNames) <$> lep
+                              repX = Bifunctor.second (\fps -> Data.Vector.map (fromEnum . (`elem` fps)) allNames) <$> rep
 
-                          z <- traverse (uncurry $ \(leftPath', leftOutputs') (rightPath', rightOutputs') ->
+                              -- [((FilePath, Set Text), (FilePath, Set Text), Int)]
+                              dopairs ((lfp, x):ls) rs =
+                                let (rfp0, y0, score0) =
+                                        List.minimumBy
+                                        (comparing (\(_,_,s) -> s))
+                                        [ (rfp, y, score) | (rfp, y) <- rs, let score = vabsdiff x y ]
+                                in (lfp, rfp0, score0) : dopairs ls (List.delete (rfp0, y0) rs)
+                              dopairs [] [] = []
+                              dopairs _ _ = error "no!"
+
+                              pairs = dopairs lepX repX
+
+                          -- liftIO $ do
+                          --   for_ [(l,r) | l <- lepX, r <- repX] $ \(l, r) -> putStrLn $ unwords [show $ fst l, show $ fst r, show $ vabsdiff (snd l) (snd r)]
+                          --   putStrLn "names"
+                          --   for_ allNames putStrLn
+                          --   putStrLn "left"
+                          --   for_ lepX $ \((fp, _outs), v) -> 
+                          --       putStrLn $ fp ++ " " ++ show v
+                          --   putStrLn "right"
+                          --   for_ repX $ \((fp, _outs), v) -> 
+                          --       putStrLn $ fp ++ " " ++ show v
+                          --   putStrLn "result"
+                          --   putStrLn $ unlines $ map (\(l, r, score) -> unwords [fst l, fst r, show score]) pairs
+                          --
+                          z <- traverse (\((leftPath', leftOutputs'), (rightPath', rightOutputs'), _) ->
                                 OneDerivationDiff inputName <$> diff False leftPath' leftOutputs' rightPath' rightOutputs')
                                pairs
 
