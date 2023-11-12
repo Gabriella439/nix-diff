@@ -1,5 +1,9 @@
 # `nix-diff`
 
+[![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/Gabriella439/nix-diff/ci.yaml?branch=main)](https://github.com/Gabriella439/nix-diff/actions/workflows/ci.yaml)
+[![Hackage version](https://img.shields.io/hackage/v/nix-diff.svg?color=success)](https://hackage.haskell.org/package/nix-diff)
+[![Dependencies](https://img.shields.io/hackage-deps/v/nix-diff?label=Dependencies)](https://packdeps.haskellers.com/feed?needle=nix-diff)
+
 This package provides a `nix-diff` executable which explains why two Nix
 derivations differ.  The most common use cases for this are:
 
@@ -90,8 +94,6 @@ Run tests, using `cabal test` command.
 You need to have nix installed in your PC.
 
 ## Development status
-
-[![Build Status](https://travis-ci.org/Gabriella439/nix-diff.png)](https://travis-ci.org/Gabriella439/nix-diff)
 
 I don't currently plan to add any new features, but I do welcome feature
 requests.  Just open an issue on the issue tracker if you would like to request
