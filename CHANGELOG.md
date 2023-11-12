@@ -1,3 +1,8 @@
+1.0.20
+
+* [Bump upper bounds](https://github.com/Gabriella439/nix-diff/pull/79)
+  * Allow `unix-2.8` and few more
+
 1.0.19
 
 * [New Haskell API](https://github.com/Gabriella439/nix-diff/pull/60)
