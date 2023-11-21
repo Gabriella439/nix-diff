@@ -8,15 +8,26 @@
 #
 # ... and then Nix will supply the correct Haskell development environment for
 # you
+{ compiler ? null
+}:
 let
   config = { };
 
   overlay = pkgsNew: pkgsOld: {
-    haskellPackages = pkgsOld.haskellPackages.override (old: {
+    haskellPackages =
+      let
+        packageSet =
+          if compiler == null
+          then pkgsOld.haskellPackages
+          else pkgsOld.haskell.packages.${compiler};
+      in packageSet.override (old: {
       overrides =
         let
-          sourceOverrides = pkgsNew.haskell.lib.packageSourceOverrides {
-            "nix-diff" = ./.;
+          fromCabal2nix = self: super: {
+            nix-diff =
+              # see a note in flake.nix
+              pkgsNew.haskell.lib.dontCheck
+                (self.callCabal2nix "nix-diff" ./. { });
           };
 
           fromDirectory = pkgsNew.haskell.lib.packagesFromDirectory {
@@ -27,7 +38,7 @@ let
 
         in
           pkgsNew.lib.fold pkgsNew.lib.composeExtensions default [
-            sourceOverrides
+            fromCabal2nix
             fromDirectory
           ];
 

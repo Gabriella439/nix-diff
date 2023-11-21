@@ -26,15 +26,15 @@ library
   build-depends:       base                 >= 4.9      && < 5
                      , attoparsec           >= 0.13     && < 0.15
                      , aeson
-                     , bytestring           >= 0.9      && < 0.12
-                     , containers           >= 0.5      && < 0.7
+                     , bytestring           >= 0.9      && < 0.13
+                     , containers           >= 0.5      && < 0.8
                      , directory                           < 1.4
-                     , mtl                  >= 2.2      && < 2.3
+                     , mtl                  >= 2.2      && < 2.4
                      , nix-derivation       >= 1.1      && < 1.2
-                     , optparse-applicative >= 0.14.0.0 && < 0.18
+                     , optparse-applicative >= 0.14.0.0 && < 0.19
                      , patience             >= 0.3      && < 0.4
-                     , text                 >= 1.2      && < 2.1
-                     , vector               >= 0.12     && < 0.13
+                     , text                 >= 1.2      && < 2.2
+                     , vector               >= 0.12     && < 0.14
                      , process                             < 1.7
                      , filepath                            < 1.5
                      , QuickCheck                          < 2.15
@@ -54,7 +54,7 @@ executable nix-diff
                      , bytestring
                      , optparse-applicative >= 0.14.0.0 && < 0.18
                      , text
-                     , unix                                < 2.8
+                     , unix                                < 2.9
                      , containers
                      , mtl
   hs-source-dirs:      app
@@ -78,8 +78,8 @@ test-suite nix-diff-test
                      , text
                      , containers
                      , mtl
-                     , typed-process     < 0.2.11
-                     , tasty             < 1.5
+                     , typed-process     < 0.2.12
+                     , tasty             < 1.6
                      , tasty-quickcheck  < 0.11
                      , tasty-silver      < 3.4
 

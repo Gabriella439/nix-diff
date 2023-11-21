@@ -3,10 +3,8 @@
 }:
 mkDerivation {
   pname = "nix-derivation";
-  version = "1.1.1";
-  sha256 = "2d69ca33daa5f92b3601b263b1360b230ff193e144db815b1b039b0ed8c18fc9";
-  revision = "1";
-  editedCabalFile = "1ink37s91kbrq8p0sqyi1i90xp2jimyg1cnzy9ydjh3iv21f7pi5";
+  version = "1.1.3";
+  sha256 = "11drhg3zjhwbvdw25k0icvbkcpqilx0m9qw60k7snfaz1iadfkdb";
   isLibrary = true;
   isExecutable = true;
   libraryHaskellDepends = [
