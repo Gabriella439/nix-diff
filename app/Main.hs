@@ -71,6 +71,13 @@ parseLineOriented =
             <>  Options.Applicative.help ("Display textual differences on a per-" <> x <> " basis")
             )
 
+parseLimitContext :: Parser Bool
+parseLimitContext =
+    Options.Applicative.switch
+        (   Options.Applicative.long "limit-context"
+        <>  Options.Applicative.help "Only display a few unchanged tokens surrounding changes (mostly only useful with --line-oriented)"
+        )
+
 parseEnvironment :: Parser Bool
 parseEnvironment =
     Options.Applicative.switch
@@ -112,6 +119,7 @@ data Options = Options
     , right            :: FilePath
     , color            :: Color
     , orientation      :: Orientation
+    , limitContext     :: Bool
     , environment      :: Bool
     , renderRunner     :: RenderRunner
     , transformOptions :: TransformOptions
@@ -123,6 +131,7 @@ parseOptions = do
     right       <- parseRight
     color       <- parseColor
     orientation <- parseLineOriented
+    limitContext <- parseLimitContext
     environment <- parseEnvironment
     renderRunner <- parseRenderRunner
     transformOptions <- parseTransformOptions

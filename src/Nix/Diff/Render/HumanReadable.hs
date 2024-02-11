@@ -13,6 +13,7 @@ module Nix.Diff.Render.HumanReadable where
 import Control.Monad (forM_)
 import Control.Monad.Reader (MonadReader, ReaderT (runReaderT), ask, local)
 import Control.Monad.Writer(MonadWriter, Writer, tell, runWriter)
+import Data.Maybe (catMaybes)
 import Data.Set (Set)
 import Data.Text (Text)
 import Numeric.Natural (Natural)
@@ -33,6 +34,7 @@ import Nix.Diff.Types
 
 data RenderContext = RenderContext
   { orientation :: Orientation
+  , limitContext :: Bool
   , tty         :: TTY
   , indent      :: Natural
   }
@@ -253,7 +255,7 @@ renderDiffHumanReadable = \case
 
     renderText :: TextDiff -> Render Text
     renderText (TextDiff chunks) = do
-      RenderContext{ indent, orientation, tty } <- ask
+      RenderContext{ indent, orientation, tty, limitContext } <- ask
 
       let n = fromIntegral indent
 
@@ -276,6 +278,31 @@ renderDiffHumanReadable = \case
           renderChunk (Patience.Both l _) =
               grey            orientation tty l
 
-      return (format (Text.concat (fmap renderChunk chunks)))
+      let maybeChunk :: [Maybe (Patience.Item Text)] -> Maybe (Patience.Item Text)
+          maybeChunk [_, _, _, Just (Patience.Old l), _, _, _] = Just (Patience.Old l)
+          maybeChunk [_, _, _, Just (Patience.New r), _, _, _] = Just (Patience.New r)
+          maybeChunk [Just (Patience.Old _), _, _, Just (Patience.Both l r), _, _, _] = Just (Patience.Both l r)
+          maybeChunk [Just (Patience.New _), _, _, Just (Patience.Both l r), _, _, _] = Just (Patience.Both l r)
+          maybeChunk [_, Just (Patience.Old _), _, Just (Patience.Both l r), _, _, _] = Just (Patience.Both l r)
+          maybeChunk [_, Just (Patience.New _), _, Just (Patience.Both l r), _, _, _] = Just (Patience.Both l r)
+          maybeChunk [_, _, Just (Patience.Old _), Just (Patience.Both l r), _, _, _] = Just (Patience.Both l r)
+          maybeChunk [_, _, Just (Patience.New _), Just (Patience.Both l r), _, _, _] = Just (Patience.Both l r)
+          maybeChunk [_, _, _, Just (Patience.Both l r), Just (Patience.Old _), _, _] = Just (Patience.Both l r)
+          maybeChunk [_, _, _, Just (Patience.Both l r), Just (Patience.New _), _, _] = Just (Patience.Both l r)
+          maybeChunk [_, _, _, Just (Patience.Both l r), _, Just (Patience.Old _), _] = Just (Patience.Both l r)
+          maybeChunk [_, _, _, Just (Patience.Both l r), _, Just (Patience.New _), _] = Just (Patience.Both l r)
+          maybeChunk [_, _, _, Just (Patience.Both l r), _, _, Just (Patience.Old _)] = Just (Patience.Both l r)
+          maybeChunk [_, _, _, Just (Patience.Both l r), _, _, Just (Patience.New _)] = Just (Patience.Both l r)
+          maybeChunk [_, _, _, Just (Patience.Both _ _), _, _, _] = Nothing
+
+      let windows :: Int -> [a] -> [[a]]
+          windows n xz@(x:xs)
+            | length v < n = []
+            | otherwise = v : windows n xs
+            where v = take n xz
+
+      return if limitContext
+                then (format (Text.concat (fmap renderChunk $ catMaybes $ fmap maybeChunk (windows 7 $ [Nothing, Nothing, Nothing] ++ (fmap Just chunks) ++ [Nothing, Nothing, Nothing]))))
+                else (format (Text.concat (fmap renderChunk chunks)))
 
     ifExist m l = maybe (pure ()) l m
