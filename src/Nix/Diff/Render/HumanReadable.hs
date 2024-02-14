@@ -35,6 +35,7 @@ data RenderContext = RenderContext
   { orientation :: Orientation
   , tty         :: TTY
   , indent      :: Natural
+  , context     :: Maybe Natural
   }
 
 newtype Render a = Render { unRender :: ReaderT RenderContext (Writer Text) a}
@@ -253,7 +254,7 @@ renderDiffHumanReadable = \case
 
     renderText :: TextDiff -> Render Text
     renderText (TextDiff chunks) = do
-      RenderContext{ indent, orientation, tty } <- ask
+      RenderContext{ indent, orientation, tty, context } <- ask
 
       let n = fromIntegral indent
 
@@ -276,6 +277,25 @@ renderDiffHumanReadable = \case
           renderChunk (Patience.Both l _) =
               grey            orientation tty l
 
-      return (format (Text.concat (fmap renderChunk chunks)))
+      let windowedChunks = case context of
+              Nothing -> chunks
+              Just m  -> fmap middle (filter predicate (zippers chunks))
+                where
+                  notBoth (Patience.Both _ _) = False
+                  notBoth  _                  = True
+
+                  nat = fromIntegral m
+
+                  predicate (before, line, after) =
+                      any notBoth (line : take nat before ++ take nat after)
+
+                  middle (_, line, _) = line
+      return (format (Text.concat (fmap renderChunk windowedChunks)))
 
     ifExist m l = maybe (pure ()) l m
+
+zippers :: [a] -> [([a], a, [a])]
+zippers = go []
+  where
+    go _           []  = []
+    go prefix (x : xs) = (prefix, x, xs) : go (x : prefix) xs
