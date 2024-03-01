@@ -29,6 +29,7 @@ import Control.Monad.Fail (MonadFail)
 
 import Nix.Diff
 import Nix.Diff.Types
+import qualified Nix.Diff.Store as Store
 
 
 data RenderContext = RenderContext
@@ -159,7 +160,7 @@ renderDiffHumanReadable = \case
   where
     renderOutputStructure os =
       renderWith os \(sign, (OutputStructure path outputs)) -> do
-        echo (sign (Text.pack path <> renderOutputs outputs))
+        echo (sign (Store.toText path <> renderOutputs outputs))
 
     renderOutputsDiff OutputsDiff{..} = do
       ifExist extraOutputs \eo -> do
@@ -217,7 +218,7 @@ renderDiffHumanReadable = \case
       echo (explain ("The input sources named `" <> srcName <> "` differ"))
       renderWith srcFileDiff \(sign, paths) -> do
         forM_ paths \path -> do
-            echo ("    " <>  sign (Text.pack path))
+            echo ("    " <>  sign (Store.toText path))
 
     renderInputsDiff InputsDiff{..} = do
       renderInputExtraNames inputExtraNames
@@ -237,7 +238,7 @@ renderDiffHumanReadable = \case
       echo (explain ("The set of input derivations named `" <> drvName <> "` do not match"))
       renderWith extraPartsDiff \(sign, extraPaths) -> do
         forM_ (Data.Map.toList extraPaths) \(extraPath, outputs) -> do
-          echo ("    " <> sign (Text.pack extraPath <> renderOutputs outputs))
+          echo ("    " <> sign (Store.toText extraPath <> renderOutputs outputs))
 
     renderEnvDiff Nothing =
       echo (explain "Skipping environment comparison")

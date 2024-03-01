@@ -1,3 +1,8 @@
+Unreleased
+
+* [Support relocated Nix store](https://github.com/Gabriella439/nix-diff/pull/82)
+  * If configured through `NIX_REMOTE` environment variable.
+
 1.0.20
 
 * [Bump upper bounds](https://github.com/Gabriella439/nix-diff/pull/79)
