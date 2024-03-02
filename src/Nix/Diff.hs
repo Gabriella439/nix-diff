@@ -179,9 +179,7 @@ getGroupedDiff oldList newList = go $ Patience.diff oldList newList
         let (fs, rest) = goNews xs
          in Patience.New (x : fs) : go rest
       Patience.Both x y : xs ->
-        let (fs, rest) = goBoth xs
-            (fxs, fys) = unzip fs
-         in Patience.Both (x : fxs) (y : fys) : go rest
+        Patience.Both [x] [y] : go xs
       [] -> []
 
     goOlds = \case
@@ -194,12 +192,6 @@ getGroupedDiff oldList newList = go $ Patience.diff oldList newList
       Patience.New x : xs ->
         let (fs, rest) = goNews xs
          in (x : fs, rest)
-      xs -> ([], xs)
-
-    goBoth = \case
-      Patience.Both x y : xs ->
-        let (fs, rest) = goBoth xs
-         in ((x, y) : fs, rest)
       xs -> ([], xs)
 
 -- | Diff two outputs

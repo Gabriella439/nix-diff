@@ -44,7 +44,7 @@ nixInstantiate :: FilePath -> ProcessConfig () () ()
 nixInstantiate fp = shell ("nix-instantiate " <> fp)
 
 nixPathInfo :: FilePath -> ProcessConfig () () ()
-nixPathInfo fp = shell ("nix path-info --experimental-features 'nix-command flakes' --derivation " <> fp)
+nixPathInfo fp = shell ("nix path-info --experimental-features 'nix-command flakes' --derivation " <> fp <> "#packages.x86_64-linux.default")
 
 makeDiffTree :: TestableDerivations -> DiffContext -> IO DerivationDiff
 makeDiffTree TestableDerivations{..} diffContext = do

@@ -10,20 +10,21 @@
 
 module Main where
 
-import Control.Applicative ((<|>))
+import Control.Applicative ((<|>), optional)
 import Data.Text (Text)
 import Options.Applicative (Parser, ParserInfo)
+import Numeric.Natural (Natural)
 
 import qualified Control.Monad.Reader
 import qualified Control.Monad.State
+import qualified Data.Aeson
+import qualified Data.ByteString.Lazy.Char8
 import qualified Data.Set
+import qualified Data.Text.IO as Text.IO
 import qualified GHC.IO.Encoding
 import qualified Options.Applicative
 import qualified System.Posix.IO
 import qualified System.Posix.Terminal
-import qualified Data.Aeson
-import qualified Data.ByteString.Lazy.Char8
-import qualified Data.Text.IO as Text.IO
 
 import Nix.Diff
 import Nix.Diff.Types
@@ -71,6 +72,14 @@ parseLineOriented =
             <>  Options.Applicative.help ("Display textual differences on a per-" <> x <> " basis")
             )
 
+parseContext :: Parser Natural
+parseContext =
+    Options.Applicative.option
+        Options.Applicative.auto
+        (   Options.Applicative.long "context"
+        <>  Options.Applicative.help "Limit context to N lines/words/characters (depending on mode)"
+        )
+
 parseEnvironment :: Parser Bool
 parseEnvironment =
     Options.Applicative.switch
@@ -115,17 +124,19 @@ data Options = Options
     , environment      :: Bool
     , renderRunner     :: RenderRunner
     , transformOptions :: TransformOptions
+    , context          :: Maybe Natural
     }
 
 parseOptions :: Parser Options
 parseOptions = do
-    left        <- parseLeft
-    right       <- parseRight
-    color       <- parseColor
-    orientation <- parseLineOriented
-    environment <- parseEnvironment
-    renderRunner <- parseRenderRunner
+    left             <- parseLeft
+    right            <- parseRight
+    color            <- parseColor
+    orientation      <- parseLineOriented
+    environment      <- parseEnvironment
+    renderRunner     <- parseRenderRunner
     transformOptions <- parseTransformOptions
+    context          <- optional parseContext
 
     return (Options { .. })
   where

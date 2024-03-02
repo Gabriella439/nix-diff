@@ -36,7 +36,7 @@ goldenTests simpleTd complexTd = testGroup "Golden tests"
   where
     toJson drv = (<> "\n") . decodeUtf8 . BS.toStrict $ (Data.Aeson.encode drv)
 
-    humanReadable_words = toHumanReadable (renderContext Word)
+    humanReadable_words = toHumanReadable (renderContext Word Nothing)
     toHumanReadable ctx drv = runRender' (renderDiffHumanReadable drv) ctx
 
     simple_env_words = mkDTSimple (diffContextEnv Word)
