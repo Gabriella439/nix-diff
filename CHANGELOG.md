@@ -1,5 +1,7 @@
 1.0.20
 
+* [Add `--context` flag](https://github.com/Gabriella439/nix-diff/pull/81)
+  * This limits the context to the specified number of characters/words/lines
 * [Bump upper bounds](https://github.com/Gabriella439/nix-diff/pull/79)
   * Allow `unix-2.8` and few more
 
