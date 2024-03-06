@@ -67,4 +67,6 @@ toText :: StorePath -> Text
 toText (StorePath p) = T.pack p
 
 stripSlash :: FilePath -> FilePath
-stripSlash = T.unpack . T.reverse . T.dropWhile (== '/') . T.reverse . T.pack
+stripSlash s | not ("/" `L.isSuffixOf` s) = s
+stripSlash s = doIt s
+  where doIt = T.unpack . T.reverse . T.dropWhile (== '/') . T.reverse . T.pack
