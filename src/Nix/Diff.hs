@@ -128,14 +128,13 @@ readFileUtf8Lenient file =
     Data.Text.Encoding.decodeUtf8With Data.Text.Encoding.Error.lenientDecode
         <$> Data.ByteString.readFile file
 
--- TODO: expose in nix-derivation
-filepathParser :: Parser FilePath
-filepathParser = do
+storepathParser :: Parser StorePath
+storepathParser = do
     text <- Nix.Derivation.textParser
     let str = Text.unpack text
     case (Text.uncons text, FilePath.isValid str) of
         (Just ('/', _), True) -> do
-            return str
+            return (StorePath str)
         _ -> do
             fail ("bad path ‘" <> Text.unpack text <> "’ in derivation")
 
@@ -146,7 +145,7 @@ readDerivation sp = do
     path <- liftIO (Store.toPhysicalPath sp)
     let string = path
     text <- liftIO (readFileUtf8Lenient string)
-    let parser = Nix.Derivation.parseDerivationWith (StorePath <$> filepathParser) Nix.Derivation.textParser
+    let parser = Nix.Derivation.parseDerivationWith (storepathParser) Nix.Derivation.textParser
     case Data.Attoparsec.Text.parse parser text of
         Done _ derivation -> do
             return derivation
