@@ -20,6 +20,7 @@ import qualified Data.Map as Map
 import Data.Set (Set)
 import Data.Text (Text)
 import Nix.Derivation (DerivationOutput (..))
+import Nix.Diff.Store ( StorePath )
 
 import qualified Patience
 import GHC.Generics (Generic)
@@ -105,7 +106,7 @@ data DerivationDiff
 -- Output structure
 
 data OutputStructure = OutputStructure
-  { derivationPath :: FilePath
+  { derivationPath :: StorePath
   , derivationOutputs :: Set Text
   }
   deriving stock (Eq, Show, Generic, Data)
@@ -115,7 +116,7 @@ data OutputStructure = OutputStructure
 -- ** Outputs diff
 
 data OutputsDiff = OutputsDiff
-  { extraOutputs :: Maybe (Changed (Map Text (DerivationOutput FilePath Text)))
+  { extraOutputs :: Maybe (Changed (Map Text (DerivationOutput StorePath Text)))
     -- ^ Map from derivation name to its outputs.
     --   Will be Nothing, if `Data.Map.difference` gives
     --   empty Maps for both new and old outputs
@@ -125,7 +126,7 @@ data OutputsDiff = OutputsDiff
   }
   deriving stock (Eq, Show, Data)
 
-deriving instance Data (DerivationOutput FilePath Text)
+deriving instance Data (DerivationOutput StorePath Text)
 
 instance Arbitrary OutputsDiff where
   arbitrary = OutputsDiff <$> arbitraryExtraOutputs  <*> arbitrary
@@ -145,10 +146,10 @@ instance ToJSON OutputsDiff where
     , "outputHashDiff" .= outputHashDiff
     ]
     where
-    extraOutputsToJSON :: Map Text (DerivationOutput FilePath Text) -> Value
+    extraOutputsToJSON :: Map Text (DerivationOutput StorePath Text) -> Value
     extraOutputsToJSON = toJSON . fmap derivationOutputToJSON
 
-    derivationOutputToJSON :: DerivationOutput FilePath Text -> Value
+    derivationOutputToJSON :: DerivationOutput StorePath Text -> Value
     derivationOutputToJSON DerivationOutput{..} = object
       [ "path" .= path
       , "hashAlgo" .= hashAlgo
@@ -165,7 +166,7 @@ instance FromJSON OutputsDiff where
     pure $ OutputsDiff eo ohd
     where
 
-      derivationOutputFromJSON :: Value -> Parser (DerivationOutput FilePath Text)
+      derivationOutputFromJSON :: Value -> Parser (DerivationOutput StorePath Text)
       derivationOutputFromJSON = withObject "DerivationOutput" \o ->
         DerivationOutput <$> o .: "path" <*> o .: "hashAlgo" <*> o .: "hash"
 
@@ -212,7 +213,7 @@ data SourceFileDiff
       }
   | SomeSourceFileDiff
       { srcName :: Text
-      , srcFileDiff :: Changed [FilePath]
+      , srcFileDiff :: Changed [StorePath]
       }
   deriving stock (Eq, Show, Generic, Data)
   deriving anyclass (ToJSON, FromJSON)
@@ -236,7 +237,7 @@ data InputDerivationsDiff
       }
   | SomeDerivationsDiff
       { drvName :: Text
-      , extraPartsDiff :: Changed (Map FilePath (Set Text))
+      , extraPartsDiff :: Changed (Map StorePath (Set Text))
       }
   deriving stock (Eq, Show, Generic, Data)
   deriving anyclass (ToJSON, FromJSON)

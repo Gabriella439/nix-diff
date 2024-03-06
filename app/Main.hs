@@ -27,6 +27,7 @@ import qualified System.Posix.IO
 import qualified System.Posix.Terminal
 
 import Nix.Diff
+import Nix.Diff.Store (StorePath(StorePath))
 import Nix.Diff.Types
 import Nix.Diff.Render.HumanReadable
 import Nix.Diff.Transformations
@@ -185,7 +186,7 @@ main = do
     let diffContext = DiffContext {..}
     let renderContext = RenderContext {..}
     let status = Status Data.Set.empty
-    let action = diff True left (Data.Set.singleton "out") right (Data.Set.singleton "out")
+    let action = diff True (StorePath left) (Data.Set.singleton "out") (StorePath right) (Data.Set.singleton "out")
     diffTree <- Control.Monad.State.evalStateT (Control.Monad.Reader.runReaderT (unDiff action) diffContext) status
     let diffTree' =
           transformDiff transformOptions diffTree

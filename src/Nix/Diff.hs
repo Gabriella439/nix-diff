@@ -13,7 +13,7 @@ import Control.Monad (forM)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader (MonadReader, ReaderT, ask)
 import Control.Monad.State (MonadState, StateT, get, put)
-import Data.Attoparsec.Text (IResult(..))
+import Data.Attoparsec.Text (IResult(..), Parser)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map (Map)
 import Data.Maybe (catMaybes)
@@ -37,7 +37,6 @@ import qualified Data.Text.Encoding.Error
 import qualified Data.Vector
 import qualified Nix.Derivation
 import qualified Patience
-import qualified System.Directory     as Directory
 import qualified System.FilePath      as FilePath
 import qualified System.Process       as Process
 
@@ -46,13 +45,15 @@ import Control.Monad.Fail (MonadFail)
 #endif
 
 import Nix.Diff.Types
+import Nix.Diff.Store (StorePath (StorePath, unsafeStorePathFile))
+import qualified Nix.Diff.Store       as Store
 
 newtype Status = Status { visited :: Set Diffed }
 
 data Diffed = Diffed
-    { leftDerivation  :: FilePath
+    { leftDerivation  :: StorePath
     , leftOutput      :: Set Text
-    , rightDerivation :: FilePath
+    , rightDerivation :: StorePath
     , rightOutput     :: Set Text
     } deriving (Eq, Ord)
 
@@ -88,11 +89,11 @@ data Orientation = Character | Word | Line
     Nix technically does not require that the Nix store is actually stored
     underneath `/nix/store`, but this is the overwhelmingly common use case
 -}
-derivationName :: FilePath -> Text
-derivationName = Text.dropEnd 4 . Text.drop 44 . Text.pack
+derivationName :: StorePath -> Text
+derivationName = Text.dropEnd 4 . Text.drop 44 . Text.pack . unsafeStorePathFile
 
 -- | Group paths by their name
-groupByName :: Map FilePath a -> Map Text (Map FilePath a)
+groupByName :: Map StorePath a -> Map Text (Map StorePath a)
 groupByName m = Data.Map.fromList assocs
   where
     toAssoc key = (derivationName key, Data.Map.filterWithKey predicate m)
@@ -107,11 +108,11 @@ groupByName m = Data.Map.fromList assocs
 
     > /nix/store/${32_CHARACTER_HASH}-${NAME}.drv
 -}
-buildProductName :: FilePath -> Text
-buildProductName = Text.drop 44 . Text.pack
+buildProductName :: StorePath -> Text
+buildProductName = Text.drop 44 . Text.pack . unsafeStorePathFile
 
 -- | Like `groupByName`, but for `Set`s
-groupSetsByName :: Set FilePath -> Map Text (Set FilePath)
+groupSetsByName :: Set StorePath -> Map Text (Set StorePath)
 groupSetsByName s = Data.Map.fromList (fmap toAssoc (Data.Set.toList s))
   where
     toAssoc key = (buildProductName key, Data.Set.filter predicate s)
@@ -127,12 +128,25 @@ readFileUtf8Lenient file =
     Data.Text.Encoding.decodeUtf8With Data.Text.Encoding.Error.lenientDecode
         <$> Data.ByteString.readFile file
 
+storepathParser :: Parser StorePath
+storepathParser = do
+    text <- Nix.Derivation.textParser
+    let str = Text.unpack text
+    case (Text.uncons text, FilePath.isValid str) of
+        (Just ('/', _), True) -> do
+            return (StorePath str)
+        _ -> do
+            fail ("bad path ‘" <> Text.unpack text <> "’ in derivation")
+
+
 -- | Read and parse a derivation from a file
-readDerivation :: FilePath -> Diff (Derivation FilePath Text)
-readDerivation path = do
+readDerivation :: StorePath -> Diff (Derivation StorePath Text)
+readDerivation sp = do
+    path <- liftIO (Store.toPhysicalPath sp)
     let string = path
     text <- liftIO (readFileUtf8Lenient string)
-    case Data.Attoparsec.Text.parse Nix.Derivation.parseDerivation text of
+    let parser = Nix.Derivation.parseDerivationWith (storepathParser) Nix.Derivation.textParser
+    case Data.Attoparsec.Text.parse parser text of
         Done _ derivation -> do
             return derivation
         _ -> do
@@ -141,11 +155,11 @@ readDerivation path = do
 -- | Read and parse a derivation from a store path that can be a derivation
 -- (.drv) or a realized path, in which case the corresponding derivation is
 -- queried.
-readInput :: FilePath -> Diff (Derivation FilePath Text)
+readInput :: StorePath -> Diff (Derivation StorePath Text)
 readInput pathAndMaybeOutput = do
-    let (path, _) = List.break (== '!') pathAndMaybeOutput
+    let (path, _) = List.break (== '!') (Store.unsafeStorePathFile pathAndMaybeOutput)
     if FilePath.isExtensionOf ".drv" path
-    then readDerivation path
+    then readDerivation (StorePath path)
     else do
         let string = path
         result <- liftIO (Process.readProcess "nix-store" [ "--query", "--deriver", string ] [])
@@ -153,7 +167,7 @@ readInput pathAndMaybeOutput = do
             [] -> fail ("Could not obtain the derivation of " ++ string)
             l : ls -> do
                 let drv_path = Data.List.NonEmpty.last (l :| ls)
-                readDerivation drv_path
+                readDerivation (StorePath drv_path)
 
 {-| Join two `Map`s on shared keys, discarding keys which are not present in
     both `Map`s
@@ -198,9 +212,9 @@ getGroupedDiff oldList newList = go $ Patience.diff oldList newList
 diffOutput
     :: Text
     -- ^ Output name
-    -> (DerivationOutput FilePath Text)
+    -> (DerivationOutput StorePath Text)
     -- ^ Left derivation outputs
-    -> (DerivationOutput FilePath Text)
+    -> (DerivationOutput StorePath Text)
     -- ^ Right derivation outputs
     -> (Maybe OutputDiff)
 diffOutput outputName leftOutput rightOutput = do
@@ -215,9 +229,9 @@ diffOutput outputName leftOutput rightOutput = do
 
 -- | Diff two sets of outputs
 diffOutputs
-    :: Map Text (DerivationOutput FilePath Text)
+    :: Map Text (DerivationOutput StorePath Text)
     -- ^ Left derivation outputs
-    -> Map Text (DerivationOutput FilePath Text)
+    -> Map Text (DerivationOutput StorePath Text)
     -- ^ Right derivation outputs
     -> OutputsDiff
 diffOutputs leftOutputs rightOutputs = do
@@ -355,9 +369,9 @@ diffEnv leftOutputs rightOutputs leftEnv rightEnv = do
 
 -- | Diff input sources
 diffSrcs
-    :: Set FilePath
+    :: Set StorePath
     -- ^ Left input sources
-    -> Set FilePath
+    -> Set StorePath
     -- ^ Right inputSources
     -> Diff SourcesDiff
 diffSrcs leftSrcs rightSrcs = do
@@ -382,12 +396,12 @@ diffSrcs leftSrcs rightSrcs = do
         case (Data.Set.toList leftExtraPaths, Data.Set.toList rightExtraPaths) of
             ([], []) -> return Nothing
             ([leftPath], [rightPath]) ->  do
-                leftExists  <- liftIO (Directory.doesFileExist leftPath)
-                rightExists <- liftIO (Directory.doesFileExist rightPath)
+                leftExists  <- liftIO (Store.doesFileExist leftPath)
+                rightExists <- liftIO (Store.doesFileExist rightPath)
                 srcContentDiff <- if leftExists && rightExists
                     then do
-                        leftText  <- liftIO (readFileUtf8Lenient leftPath)
-                        rightText <- liftIO (readFileUtf8Lenient rightPath)
+                        leftText  <- liftIO (Store.readFileUtf8Lenient leftPath)
+                        rightText <- liftIO (Store.readFileUtf8Lenient rightPath)
 
                         text <- diffText leftText rightText
                         return (Just text)
@@ -419,7 +433,7 @@ diffArgs leftArgs rightArgs = fmap ArgumentsDiff do
         let rightList = Data.Vector.toList rightArgs
         Data.List.NonEmpty.nonEmpty (Patience.diff leftList rightList)
 
-diff :: Bool -> FilePath -> Set Text -> FilePath -> Set Text -> Diff DerivationDiff
+diff :: Bool -> StorePath -> Set Text -> StorePath -> Set Text -> Diff DerivationDiff
 diff topLevel leftPath leftOutputs rightPath rightOutputs = do
     Status { visited } <- get
     let diffed = Diffed leftPath leftOutputs rightPath rightOutputs
