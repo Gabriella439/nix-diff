@@ -13,10 +13,11 @@ import System.Process.Typed
 
 import Nix.Diff ( diff, Diff(unDiff), DiffContext, Status(Status) )
 import Nix.Diff.Types ( DerivationDiff )
+import Nix.Diff.Store ( StorePath(StorePath) )
 
 data TestableDerivations = TestableDerivations
-  { oldDerivation :: FilePath
-  , newDerivation :: FilePath
+  { oldDerivation :: StorePath
+  , newDerivation :: StorePath
   }
   deriving Show
 
@@ -26,9 +27,7 @@ initSimpleDerivations = do
   (nExit, n) <- readProcessStdout (nixInstantiate "./golden-tests/derivations/simple/new/drv.nix")
   unless (oExit == ExitSuccess || nExit == ExitSuccess)
     (throwIO (ErrorCall  "Can't instantiate simple derivations"))
-  pure (TestableDerivations (toFilePath o) (toFilePath n))
-  where
-    toFilePath = BS.unpack . BS.init -- drop new-line char
+  pure (TestableDerivations (storePathFromCLI o) (storePathFromCLI n))
 
 initComplexDerivations :: IO TestableDerivations
 initComplexDerivations = do
@@ -36,9 +35,7 @@ initComplexDerivations = do
   (nExit, n) <- readProcessStdout (nixPathInfo "./golden-tests/derivations/complex/new/")
   unless (oExit == ExitSuccess || nExit == ExitSuccess)
     (throwIO (ErrorCall  "Can't instantiate complex derivations"))
-  pure (TestableDerivations (toFilePath o) (toFilePath n))
-  where
-    toFilePath = BS.unpack . BS.init -- drop new-line char
+  pure (TestableDerivations (storePathFromCLI o) (storePathFromCLI n))
 
 nixInstantiate :: FilePath -> ProcessConfig () () ()
 nixInstantiate fp = shell ("nix-instantiate " <> fp)
@@ -51,3 +48,7 @@ makeDiffTree TestableDerivations{..} diffContext = do
   let status = Status Data.Set.empty
   let action = diff True oldDerivation (Data.Set.singleton "out") newDerivation (Data.Set.singleton "out")
   Control.Monad.State.evalStateT (Control.Monad.Reader.runReaderT (unDiff action) diffContext) status
+
+-- | Drop conventional stdout newline, convert to StorePath
+storePathFromCLI :: BS.ByteString -> StorePath
+storePathFromCLI = StorePath . BS.unpack . BS.init -- drop new-line char
