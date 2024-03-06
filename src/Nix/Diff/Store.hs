@@ -58,8 +58,8 @@ toPhysicalPath (StorePath p) = do
   nixStoreDir <- lookupEnv "NIX_STORE_DIR" <&> maybe "/nix/store" stripSlash
   nixRemoteMaybe <- lookupEnv "NIX_REMOTE" <&> fmap stripSlash
   case nixRemoteMaybe of
-    Just nixRemote@('/':_) ->
-      pure $ replaceStart nixStoreDir (nixRemote <> "/" <> nixStoreDir) p
+    Just nixRemote | nixStoreDir `L.isPrefixOf` p -> do
+      pure $ nixRemote <> "/" <> L.dropWhile (== '/') p
     _ -> pure p
 
 -- | Convert a 'StorePath' to a 'Text' for display purposes. The path may not exist at this physical location.
@@ -68,9 +68,3 @@ toText (StorePath p) = Data.Text.pack p
 
 stripSlash :: FilePath -> FilePath
 stripSlash = reverse . dropWhile (== '/') . reverse
-
-replaceStart :: String -> String -> String -> String
-replaceStart pattern replacement text =
-  case L.stripPrefix pattern text of
-    Just rest -> replacement <> rest
-    Nothing -> text
