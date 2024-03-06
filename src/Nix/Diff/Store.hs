@@ -24,12 +24,12 @@ import Data.Data (Data)
 import Data.Functor ((<&>))
 import qualified Data.List as L
 import Data.Text (Text)
-import qualified Data.Text
 import qualified Data.Text.Encoding
 import qualified Data.Text.Encoding.Error
 import qualified System.Directory as Directory
 import System.Environment (lookupEnv)
 import Test.QuickCheck (Arbitrary)
+import qualified Data.Text as T
 
 -- | A file path that may not exist on the true file system;
 -- needs to be looked up in a store, which may be relocated.
@@ -64,7 +64,7 @@ toPhysicalPath (StorePath p) = do
 
 -- | Convert a 'StorePath' to a 'Text' for display purposes. The path may not exist at this physical location.
 toText :: StorePath -> Text
-toText (StorePath p) = Data.Text.pack p
+toText (StorePath p) = T.pack p
 
 stripSlash :: FilePath -> FilePath
-stripSlash = reverse . dropWhile (== '/') . reverse
+stripSlash = T.unpack . T.reverse . T.dropWhile (== '/') . T.reverse . T.pack
