@@ -43,7 +43,8 @@
                     export NIX_LOCALSTATE_DIR=$TEST_ROOT/var
                     export NIX_LOG_DIR=$TEST_ROOT/var/log/nix
                     export NIX_STATE_DIR=$TEST_ROOT/var/nix
-                    export NIX_REMOTE="$TESTROOT/store"
+                    # Note the trailing question mark. It tests Nix.Diff.Store.stripQuery.
+                    export NIX_REMOTE="$TESTROOT/store?"
                     export HOME="$TESTROOT/home"
                     mkdir -p $HOME
                     echo "Copying pinned Nixpkgs for golden tests to relocated store $NIX_REMOTE"
