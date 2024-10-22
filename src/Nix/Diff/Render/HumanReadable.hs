@@ -13,7 +13,6 @@ module Nix.Diff.Render.HumanReadable where
 import Control.Monad (forM_)
 import Control.Monad.Reader (MonadReader, ReaderT (runReaderT), ask, local)
 import Control.Monad.Writer(MonadWriter, Writer, tell, runWriter)
-import Data.Set (Set)
 import Data.Text (Text)
 import Numeric.Natural (Natural)
 
@@ -131,7 +130,7 @@ renderWith Changed{..} k = do
     k (plus  tty, now)
 
 -- | Format the derivation outputs
-renderOutputs :: Set Text -> Text
+renderOutputs :: Outputs -> Text
 renderOutputs outputs =
     ":{" <> Text.intercalate "," (Data.Set.toList outputs) <> "}"
 
@@ -160,7 +159,7 @@ renderDiffHumanReadable = \case
 
   where
     renderOutputStructure os =
-      renderWith os \(sign, (OutputStructure path outputs)) -> do
+      renderWith os \(sign, OutputStructure path outputs) -> do
         echo (sign (Store.toText path <> renderOutputs outputs))
 
     renderOutputsDiff OutputsDiff{..} = do

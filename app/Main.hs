@@ -2,9 +2,6 @@
 {-# LANGUAGE BlockArguments             #-}
 {-# LANGUAGE CPP                        #-}
 {-# LANGUAGE DuplicateRecordFields      #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE LambdaCase                 #-}
-{-# LANGUAGE NamedFieldPuns             #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE RecordWildCards            #-}
 
@@ -47,7 +44,7 @@ parseColor =
     Options.Applicative.option
         reader
         (   Options.Applicative.long "color"
-        <>  Options.Applicative.help ("display colors always, automatically (if terminal detected), or never")
+        <>  Options.Applicative.help "display colors always, automatically (if terminal detected), or never"
         <>  Options.Applicative.value Auto
         <>  Options.Applicative.metavar "(always|auto|never)"
         )

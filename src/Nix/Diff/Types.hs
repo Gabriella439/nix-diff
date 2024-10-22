@@ -1,6 +1,5 @@
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE DerivingStrategies    #-}
 {-# LANGUAGE DeriveAnyClass        #-}
 {-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE DeriveTraversable     #-}
@@ -67,7 +66,7 @@ instance ToJSON TextDiff where
 instance FromJSON TextDiff where
   parseJSON v = TextDiff <$> (traverse itemFromJSON =<< parseJSON v)
 
--- Helpfull aliases
+-- Helpful aliases
 
 type OutputHash = Text
 
@@ -76,6 +75,9 @@ type Platform = Text
 type Builder = Text
 
 type Argument = Text
+
+-- | A set of Nix derivation output names.
+type Outputs = Set Text
 
 -- Derivation diff
 
@@ -107,7 +109,7 @@ data DerivationDiff
 
 data OutputStructure = OutputStructure
   { derivationPath :: StorePath
-  , derivationOutputs :: Set Text
+  , derivationOutputs :: Outputs
   }
   deriving stock (Eq, Show, Generic, Data)
   deriving anyclass (ToJSON, FromJSON)
@@ -237,7 +239,7 @@ data InputDerivationsDiff
       }
   | SomeDerivationsDiff
       { drvName :: Text
-      , extraPartsDiff :: Changed (Map StorePath (Set Text))
+      , extraPartsDiff :: Changed (Map StorePath Outputs)
       }
   deriving stock (Eq, Show, Generic, Data)
   deriving anyclass (ToJSON, FromJSON)

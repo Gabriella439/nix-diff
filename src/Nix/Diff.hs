@@ -14,6 +14,7 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader (MonadReader, ReaderT, ask)
 import Control.Monad.State (MonadState, StateT, get, put)
 import Data.Attoparsec.Text (IResult(..), Parser)
+import qualified Data.Functor as Functor (unzip)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map (Map)
 import Data.Maybe (catMaybes)
@@ -52,9 +53,9 @@ newtype Status = Status { visited :: Set Diffed }
 
 data Diffed = Diffed
     { leftDerivation  :: StorePath
-    , leftOutput      :: Set Text
+    , leftOutput      :: Outputs
     , rightDerivation :: StorePath
-    , rightOutput     :: Set Text
+    , rightOutput     :: Outputs
     } deriving (Eq, Ord)
 
 newtype Diff a = Diff { unDiff :: ReaderT DiffContext (StateT Status IO) a }
@@ -145,7 +146,7 @@ readDerivation sp = do
     path <- liftIO (Store.toPhysicalPath sp)
     let string = path
     text <- liftIO (readFileUtf8Lenient string)
-    let parser = Nix.Derivation.parseDerivationWith (storepathParser) Nix.Derivation.textParser
+    let parser = Nix.Derivation.parseDerivationWith storepathParser Nix.Derivation.textParser
     case Data.Attoparsec.Text.parse parser text of
         Done _ derivation -> do
             return derivation
@@ -212,11 +213,11 @@ getGroupedDiff oldList newList = go $ Patience.diff oldList newList
 diffOutput
     :: Text
     -- ^ Output name
-    -> (DerivationOutput StorePath Text)
+    -> DerivationOutput StorePath Text
     -- ^ Left derivation outputs
-    -> (DerivationOutput StorePath Text)
+    -> DerivationOutput StorePath Text
     -- ^ Right derivation outputs
-    -> (Maybe OutputDiff)
+    -> Maybe OutputDiff
 diffOutput outputName leftOutput rightOutput = do
     -- We deliberately do not include output paths or hashes in the diff since
     -- we already expect them to differ if the inputs differ.  Instead, we focus
@@ -328,9 +329,9 @@ diffText left right = do
 
 -- | Diff two environments
 diffEnv
-    :: Set Text
+    :: Outputs
     -- ^ Left derivation outputs
-    -> Set Text
+    -> Outputs
     -- ^ Right derivation outputs
     -> Map Text Text
     -- ^ Left environment to compare
@@ -384,7 +385,7 @@ diffSrcs leftSrcs rightSrcs = do
     let leftExtraNames  = Data.Set.difference leftNames  rightNames
     let rightExtraNames = Data.Set.difference rightNames leftNames
 
-    let extraSrcNames = if (leftNames /= rightNames)
+    let extraSrcNames = if leftNames /= rightNames
         then Just (Changed leftExtraNames rightExtraNames)
         else Nothing
 
@@ -433,7 +434,20 @@ diffArgs leftArgs rightArgs = fmap ArgumentsDiff do
         let rightList = Data.Vector.toList rightArgs
         Data.List.NonEmpty.nonEmpty (Patience.diff leftList rightList)
 
-diff :: Bool -> StorePath -> Set Text -> StorePath -> Set Text -> Diff DerivationDiff
+diff :: Bool
+     -- ^ Is this the top-level call for a comparison?
+     --
+     -- If so, the diff will be more detailed.
+     -> StorePath
+     -- ^ Store path of left derivation.
+     -> Outputs
+     -- ^ Output names of left derivation.
+     -> StorePath
+     -- ^ Store path of right derivation.
+     -> Outputs
+     -- ^ Output names of right derivation.
+     -> Diff DerivationDiff
+     -- ^ Description of how the two derivations differ.
 diff topLevel leftPath leftOutputs rightPath rightOutputs = do
     Status { visited } <- get
     let diffed = Diffed leftPath leftOutputs rightPath rightOutputs
@@ -487,12 +501,12 @@ diff topLevel leftPath leftOutputs rightPath rightOutputs = do
             let leftExtraNames  = Data.Set.difference leftNames  rightNames
             let rightExtraNames = Data.Set.difference rightNames leftNames
 
-            let inputExtraNames = if (leftNames /= rightNames)
+            let inputExtraNames = if leftNames /= rightNames
                 then Just (Changed leftExtraNames rightExtraNames)
                 else Nothing
 
             let assocs = Data.Map.toList (innerJoin leftInputs rightInputs)
-            (descended, mInputsDiff) <- unzip <$> forM assocs \(inputName, (leftPaths, rightPaths)) -> do
+            (descended, mInputsDiff) <- Functor.unzip <$> forM assocs \(inputName, (leftPaths, rightPaths)) -> do
                 let leftExtraPaths =
                         Data.Map.difference leftPaths  rightPaths
                 let rightExtraPaths =
