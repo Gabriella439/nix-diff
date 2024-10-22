@@ -240,6 +240,10 @@ renderDiffHumanReadable = \case
       renderWith extraPartsDiff \(sign, extraPaths) -> do
         forM_ (Data.Map.toList extraPaths) \(extraPath, outputs) -> do
           echo ("    " <> sign (Store.toText extraPath <> renderOutputs outputs))
+    renderInputDerivationsDiff ManyDerivationsAlreadyComparedDiff{..} = do
+      echo (explain "Input derivations differ but have already been compared")
+      forM_ (Data.Set.toList drvNames) \name -> do
+        echo ("    " <> name)
 
     renderEnvDiff Nothing =
       echo (explain "Skipping environment comparison")

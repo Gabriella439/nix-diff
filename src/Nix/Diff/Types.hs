@@ -239,6 +239,10 @@ data InputDerivationsDiff
       { drvName :: Text
       , extraPartsDiff :: Changed (Map StorePath (Set Text))
       }
+  | -- | Many input derivations differ, but they've all already been compared.
+    ManyDerivationsAlreadyComparedDiff
+      { drvNames :: Set Text
+      }
   deriving stock (Eq, Show, Generic, Data)
   deriving anyclass (ToJSON, FromJSON)
   deriving Arbitrary via GenericArbitrary InputDerivationsDiff
