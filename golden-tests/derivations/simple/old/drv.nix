@@ -9,24 +9,24 @@ let
     name = "second_derivation";
     derivations = [ one ];
     builder = "builder";
-    system = builtins.currentSystem;
+    system = "x86_64-linux";
   };
   three = derivation {
     name = "third_derivation";
     derivations = [ one ];
     builder = "builder";
-    system = builtins.currentSystem;
+    system = "x86_64-linux";
   };
   namesMissmatch = derivation {
     name = "old";
     builder = "builder";
-    system = builtins.currentSystem;
+    system = "x86_64-linux";
   };
   outputsMissmatch = derivation {
     name = "outputs";
     outputs = [ "out" "bin" ];
     builder = "builder";
-    system = builtins.currentSystem;
+    system = "x86_64-linux";
   };
 in
 derivation {
@@ -35,5 +35,5 @@ derivation {
   srcs = [ ./changed-file ./missing-file ];
   derivations = [ two three namesMissmatch outputsMissmatch ];
   args = [ "one" "two" "three" ];
-  system = builtins.currentSystem;
+  system = "x86_64-linux";
 }
