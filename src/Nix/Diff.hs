@@ -53,9 +53,9 @@ newtype Status = Status { visited :: Set Diffed }
 
 data Diffed = Diffed
     { leftDerivation  :: StorePath
-    , leftOutput      :: Outputs
+    , leftOutput      :: OutputNames
     , rightDerivation :: StorePath
-    , rightOutput     :: Outputs
+    , rightOutput     :: OutputNames
     } deriving (Eq, Ord)
 
 newtype Diff a = Diff { unDiff :: ReaderT DiffContext (StateT Status IO) a }
@@ -329,16 +329,16 @@ diffText left right = do
 
 -- | Diff two environments
 diffEnv
-    :: Outputs
+    :: OutputNames
     -- ^ Left derivation outputs
-    -> Outputs
+    -> OutputNames
     -- ^ Right derivation outputs
     -> Map Text Text
     -- ^ Left environment to compare
     -> Map Text Text
     -- ^ Right environment to compare
     -> Diff EnvironmentDiff
-diffEnv leftOutputs rightOutputs leftEnv rightEnv = do
+diffEnv (OutputNames leftOutputs) (OutputNames rightOutputs) leftEnv rightEnv = do
     let leftExtraEnv  = Data.Map.difference leftEnv  rightEnv
     let rightExtraEnv = Data.Map.difference rightEnv leftEnv
 
@@ -440,11 +440,11 @@ diff :: Bool
      -- If so, the diff will be more detailed.
      -> StorePath
      -- ^ Store path of left derivation.
-     -> Outputs
+     -> OutputNames
      -- ^ Output names of left derivation.
      -> StorePath
      -- ^ Store path of right derivation.
-     -> Outputs
+     -> OutputNames
      -- ^ Output names of right derivation.
      -> Diff DerivationDiff
      -- ^ Description of how the two derivations differ.
@@ -493,8 +493,8 @@ diff topLevel leftPath leftOutputs rightPath rightOutputs = do
             let rightSrcs = Nix.Derivation.inputSrcs rightDerivation
             sourcesDiff <- diffSrcs leftSrcs rightSrcs
 
-            let leftInputs  = groupByName (Nix.Derivation.inputDrvs leftDerivation)
-            let rightInputs = groupByName (Nix.Derivation.inputDrvs rightDerivation)
+            let leftInputs  = groupByName (Data.Map.map OutputNames (Nix.Derivation.inputDrvs leftDerivation))
+            let rightInputs = groupByName (Data.Map.map OutputNames (Nix.Derivation.inputDrvs rightDerivation))
 
             let leftNames  = Data.Map.keysSet leftInputs
             let rightNames = Data.Map.keysSet rightInputs
@@ -532,7 +532,7 @@ diff topLevel leftPath leftOutputs rightPath rightOutputs = do
                 else do
                   let leftEnv  = Nix.Derivation.env leftDerivation
                   let rightEnv = Nix.Derivation.env rightDerivation
-                  let leftOutNames  = Data.Map.keysSet leftOuts
-                  let rightOutNames = Data.Map.keysSet rightOuts
+                  let leftOutNames  = OutputNames (Data.Map.keysSet leftOuts)
+                  let rightOutNames = OutputNames (Data.Map.keysSet rightOuts)
                   Just <$> diffEnv leftOutNames rightOutNames leftEnv rightEnv
             pure DerivationDiff{..}

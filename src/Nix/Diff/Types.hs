@@ -1,13 +1,14 @@
-{-# LANGUAGE RecordWildCards       #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE DeriveAnyClass        #-}
-{-# LANGUAGE DeriveGeneric         #-}
-{-# LANGUAGE DeriveTraversable     #-}
-{-# LANGUAGE BlockArguments        #-}
-{-# LANGUAGE DerivingVia           #-}
-{-# LANGUAGE DeriveDataTypeable    #-}
-{-# LANGUAGE StandaloneDeriving    #-}
-{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE RecordWildCards            #-}
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE DeriveAnyClass             #-}
+{-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE DeriveTraversable          #-}
+{-# LANGUAGE BlockArguments             #-}
+{-# LANGUAGE DerivingVia                #-}
+{-# LANGUAGE DeriveDataTypeable         #-}
+{-# LANGUAGE StandaloneDeriving         #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# OPTIONS_GHC -Wno-orphans -fconstraint-solver-iterations=0 #-}
 
 module Nix.Diff.Types where
@@ -77,7 +78,11 @@ type Builder = Text
 type Argument = Text
 
 -- | A set of Nix derivation output names.
-type Outputs = Set Text
+newtype OutputNames = OutputNames {unOutputNames :: Set Text}
+  deriving newtype (Eq, Ord)
+  deriving stock (Show, Generic, Data)
+  deriving anyclass (ToJSON, FromJSON)
+  deriving Arbitrary via GenericArbitrary OutputNames
 
 -- Derivation diff
 
@@ -109,7 +114,7 @@ data DerivationDiff
 
 data OutputStructure = OutputStructure
   { derivationPath :: StorePath
-  , derivationOutputs :: Outputs
+  , derivationOutputs :: OutputNames
   }
   deriving stock (Eq, Show, Generic, Data)
   deriving anyclass (ToJSON, FromJSON)
@@ -239,7 +244,7 @@ data InputDerivationsDiff
       }
   | SomeDerivationsDiff
       { drvName :: Text
-      , extraPartsDiff :: Changed (Map StorePath Outputs)
+      , extraPartsDiff :: Changed (Map StorePath OutputNames)
       }
   deriving stock (Eq, Show, Generic, Data)
   deriving anyclass (ToJSON, FromJSON)

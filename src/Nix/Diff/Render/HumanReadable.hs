@@ -130,8 +130,8 @@ renderWith Changed{..} k = do
     k (plus  tty, now)
 
 -- | Format the derivation outputs
-renderOutputs :: Outputs -> Text
-renderOutputs outputs =
+renderOutputs :: OutputNames -> Text
+renderOutputs (OutputNames outputs) =
     ":{" <> Text.intercalate "," (Data.Set.toList outputs) <> "}"
 
 renderDiffHumanReadable :: DerivationDiff -> Render ()

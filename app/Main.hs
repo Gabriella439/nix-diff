@@ -183,7 +183,7 @@ main = do
     let diffContext = DiffContext {..}
     let renderContext = RenderContext {..}
     let status = Status Data.Set.empty
-    let action = diff True (StorePath left) (Data.Set.singleton "out") (StorePath right) (Data.Set.singleton "out")
+    let action = diff True (StorePath left) (OutputNames (Data.Set.singleton "out")) (StorePath right) (OutputNames (Data.Set.singleton "out"))
     diffTree <- Control.Monad.State.evalStateT (Control.Monad.Reader.runReaderT (unDiff action) diffContext) status
     let diffTree' =
           transformDiff transformOptions diffTree
