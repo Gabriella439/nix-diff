@@ -31,6 +31,8 @@ common language
     LambdaCase,
     MultiWayIf,
     NamedFieldPuns,
+    NoFieldSelectors,
+    OverloadedRecordDot,
     OverloadedStrings,
     RecordWildCards,
   ghc-options:         -Wall

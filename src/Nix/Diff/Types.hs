@@ -54,7 +54,7 @@ instance Arbitrary TextDiff where
   arbitrary = TextDiff <$> listOf arbitraryItem
 
 instance ToJSON TextDiff where
-  toJSON = listValue itemToJSON . unTextDiff
+  toJSON textDiff = listValue itemToJSON textDiff.unTextDiff
 
 instance FromJSON TextDiff where
   parseJSON v = TextDiff <$> (traverse itemFromJSON =<< parseJSON v)
@@ -187,7 +187,7 @@ instance Arbitrary ArgumentsDiff where
   arbitrary = ArgumentsDiff . NonEmpty.fromList <$> listOf1 arbitraryItem
 
 instance ToJSON ArgumentsDiff where
-  toJSON = listValue itemToJSON . toList . unArgumetsDiff
+  toJSON argumentsDiff = listValue itemToJSON (toList argumentsDiff.unArgumetsDiff)
 
 instance FromJSON ArgumentsDiff where
   parseJSON v = ArgumentsDiff <$> (traverse itemFromJSON =<< parseJSON v)

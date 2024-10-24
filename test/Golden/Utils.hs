@@ -44,7 +44,7 @@ makeDiffTree :: TestableDerivations -> DiffContext -> IO DerivationDiff
 makeDiffTree TestableDerivations{..} diffContext = do
   let status = Status Data.Set.empty
   let action = diff True oldDerivation (OutputNames (Data.Set.singleton "out")) newDerivation (OutputNames (Data.Set.singleton "out"))
-  Control.Monad.State.evalStateT (Control.Monad.Reader.runReaderT (unDiff action) diffContext) status
+  Control.Monad.State.evalStateT (Control.Monad.Reader.runReaderT action.unDiff diffContext) status
 
 -- | Drop conventional stdout newline, convert to StorePath
 storePathFromCLI :: BS.ByteString -> StorePath
