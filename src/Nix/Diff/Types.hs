@@ -79,9 +79,8 @@ type Argument = Text
 
 -- | A set of Nix derivation output names.
 newtype OutputNames = OutputNames {unOutputNames :: Set Text}
-  deriving newtype (Eq, Ord)
+  deriving newtype (Eq, Ord, ToJSON, FromJSON)
   deriving stock (Show, Generic, Data)
-  deriving anyclass (ToJSON, FromJSON)
   deriving Arbitrary via GenericArbitrary OutputNames
 
 -- Derivation diff
