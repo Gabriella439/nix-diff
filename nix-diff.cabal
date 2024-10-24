@@ -53,7 +53,7 @@ executable nix-diff
                      , nix-diff
                      , aeson
                      , bytestring
-                     , optparse-applicative >= 0.14.0.0 && < 0.18
+                     , optparse-applicative
                      , text
                      , unix                                < 2.9
                      , containers
