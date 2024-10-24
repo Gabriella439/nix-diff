@@ -1,15 +1,7 @@
-{-# LANGUAGE RecordWildCards            #-}
-{-# LANGUAGE OverloadedStrings          #-}
-{-# LANGUAGE DeriveAnyClass             #-}
-{-# LANGUAGE DeriveGeneric              #-}
-{-# LANGUAGE DeriveTraversable          #-}
-{-# LANGUAGE BlockArguments             #-}
-{-# LANGUAGE DerivingVia                #-}
-{-# LANGUAGE DeriveDataTypeable         #-}
-{-# LANGUAGE StandaloneDeriving         #-}
-{-# LANGUAGE FlexibleInstances          #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# OPTIONS_GHC -Wno-orphans -fconstraint-solver-iterations=0 #-}
+-- Needed for `deriving Arbitrary via GenericArbitrary DerivationDiff`:
+{-# OPTIONS_GHC -fconstraint-solver-iterations=0 #-}
+-- Needed for `deriving instance Data (DerivationOutput StorePath Text)`:
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Nix.Diff.Types where
 
@@ -62,7 +54,7 @@ instance Arbitrary TextDiff where
   arbitrary = TextDiff <$> listOf arbitraryItem
 
 instance ToJSON TextDiff where
-  toJSON = listValue itemToJSON . unTextDiff
+  toJSON = listValue itemToJSON . (.unTextDiff)
 
 instance FromJSON TextDiff where
   parseJSON v = TextDiff <$> (traverse itemFromJSON =<< parseJSON v)
@@ -195,7 +187,7 @@ instance Arbitrary ArgumentsDiff where
   arbitrary = ArgumentsDiff . NonEmpty.fromList <$> listOf1 arbitraryItem
 
 instance ToJSON ArgumentsDiff where
-  toJSON = listValue itemToJSON . toList . unArgumetsDiff
+  toJSON = listValue itemToJSON . toList . (.unArgumetsDiff)
 
 instance FromJSON ArgumentsDiff where
   parseJSON v = ArgumentsDiff <$> (traverse itemFromJSON =<< parseJSON v)
