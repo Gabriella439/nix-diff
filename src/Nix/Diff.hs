@@ -14,7 +14,6 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader (MonadReader, ReaderT, ask)
 import Control.Monad.State (MonadState, StateT, get, put)
 import Data.Attoparsec.Text (IResult(..), Parser)
-import qualified Data.Functor as Functor (unzip)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map (Map)
 import Data.Maybe (catMaybes)
@@ -22,6 +21,7 @@ import Data.Set (Set)
 import Data.Text (Text)
 import Data.Vector (Vector)
 import Nix.Derivation (Derivation, DerivationOutput)
+import Prelude hiding (unzip)
 
 import qualified Control.Monad.Reader
 import qualified Data.Attoparsec.Text
@@ -48,6 +48,13 @@ import Control.Monad.Fail (MonadFail)
 import Nix.Diff.Types
 import Nix.Diff.Store (StorePath (StorePath, unsafeStorePathFile))
 import qualified Nix.Diff.Store       as Store
+
+#if MIN_VERSION_base(4,19,0)
+import Data.Functor (unzip)
+#else
+unzip :: Functor f => f (a, b) -> (f a, f b)
+unzip xs = (fst <$> xs, snd <$> xs)
+#endif
 
 newtype Status = Status { visited :: Set Diffed }
 
@@ -506,7 +513,7 @@ diff topLevel leftPath leftOutputs rightPath rightOutputs = do
                 else Nothing
 
             let assocs = Data.Map.toList (innerJoin leftInputs rightInputs)
-            (descended, mInputsDiff) <- Functor.unzip <$> forM assocs \(inputName, (leftPaths, rightPaths)) -> do
+            (descended, mInputsDiff) <- unzip <$> forM assocs \(inputName, (leftPaths, rightPaths)) -> do
                 let leftExtraPaths =
                         Data.Map.difference leftPaths  rightPaths
                 let rightExtraPaths =
