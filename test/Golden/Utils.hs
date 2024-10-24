@@ -12,7 +12,7 @@ import Control.Exception ( throwIO, ErrorCall(ErrorCall) )
 import System.Process.Typed
 
 import Nix.Diff ( diff, Diff(unDiff), DiffContext, Status(Status) )
-import Nix.Diff.Types ( DerivationDiff )
+import Nix.Diff.Types ( DerivationDiff, OutputNames(OutputNames) )
 import Nix.Diff.Store ( StorePath(StorePath) )
 
 data TestableDerivations = TestableDerivations
@@ -46,7 +46,7 @@ nixPathInfo fp = shell ("nix path-info --experimental-features 'nix-command flak
 makeDiffTree :: TestableDerivations -> DiffContext -> IO DerivationDiff
 makeDiffTree TestableDerivations{..} diffContext = do
   let status = Status Data.Set.empty
-  let action = diff True oldDerivation (Data.Set.singleton "out") newDerivation (Data.Set.singleton "out")
+  let action = diff True oldDerivation (OutputNames (Data.Set.singleton "out")) newDerivation (OutputNames (Data.Set.singleton "out"))
   Control.Monad.State.evalStateT (Control.Monad.Reader.runReaderT (unDiff action) diffContext) status
 
 -- | Drop conventional stdout newline, convert to StorePath

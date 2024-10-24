@@ -2,9 +2,6 @@
 {-# LANGUAGE BlockArguments             #-}
 {-# LANGUAGE CPP                        #-}
 {-# LANGUAGE DuplicateRecordFields      #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE LambdaCase                 #-}
-{-# LANGUAGE NamedFieldPuns             #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE RecordWildCards            #-}
 
@@ -47,7 +44,7 @@ parseColor =
     Options.Applicative.option
         reader
         (   Options.Applicative.long "color"
-        <>  Options.Applicative.help ("display colors always, automatically (if terminal detected), or never")
+        <>  Options.Applicative.help "display colors always, automatically (if terminal detected), or never"
         <>  Options.Applicative.value Auto
         <>  Options.Applicative.metavar "(always|auto|never)"
         )
@@ -186,7 +183,7 @@ main = do
     let diffContext = DiffContext {..}
     let renderContext = RenderContext {..}
     let status = Status Data.Set.empty
-    let action = diff True (StorePath left) (Data.Set.singleton "out") (StorePath right) (Data.Set.singleton "out")
+    let action = diff True (StorePath left) (OutputNames (Data.Set.singleton "out")) (StorePath right) (OutputNames (Data.Set.singleton "out"))
     diffTree <- Control.Monad.State.evalStateT (Control.Monad.Reader.runReaderT (unDiff action) diffContext) status
     let diffTree' =
           transformDiff transformOptions diffTree
