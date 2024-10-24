@@ -1,6 +1,3 @@
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE OverloadedStrings #-}
-
 module Golden.Utils where
 
 import qualified Data.ByteString.Lazy.Char8 as BS

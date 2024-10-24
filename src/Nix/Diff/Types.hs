@@ -1,15 +1,7 @@
-{-# LANGUAGE RecordWildCards            #-}
-{-# LANGUAGE OverloadedStrings          #-}
-{-# LANGUAGE DeriveAnyClass             #-}
-{-# LANGUAGE DeriveGeneric              #-}
-{-# LANGUAGE DeriveTraversable          #-}
-{-# LANGUAGE BlockArguments             #-}
-{-# LANGUAGE DerivingVia                #-}
-{-# LANGUAGE DeriveDataTypeable         #-}
-{-# LANGUAGE StandaloneDeriving         #-}
-{-# LANGUAGE FlexibleInstances          #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# OPTIONS_GHC -Wno-orphans -fconstraint-solver-iterations=0 #-}
+-- Needed for `deriving Arbitrary via GenericArbitrary DerivationDiff`:
+{-# OPTIONS_GHC -fconstraint-solver-iterations=0 #-}
+-- Needed for `deriving instance Data (DerivationOutput StorePath Text)`:
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Nix.Diff.Types where
 
