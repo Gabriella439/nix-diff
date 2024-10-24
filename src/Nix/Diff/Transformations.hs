@@ -28,7 +28,7 @@ import Data.Text (Text)
           • These two derivations have already been compared
     ```
     This transformation will fold all these subtrees of diff
-    into one OnlyAlreadComparedBelow.
+    into one OnlyAlreadyComparedBelow.
 -}
 foldAlreadyComparedSubTrees :: DerivationDiff -> DerivationDiff
 foldAlreadyComparedSubTrees dd = case dd of

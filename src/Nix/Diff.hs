@@ -21,6 +21,7 @@ import Data.Set (Set)
 import Data.Text (Text)
 import Data.Vector (Vector)
 import Nix.Derivation (Derivation, DerivationOutput)
+import Prelude hiding (unzip)
 
 import qualified Control.Monad.Reader
 import qualified Data.Attoparsec.Text
@@ -48,13 +49,20 @@ import Nix.Diff.Types
 import Nix.Diff.Store (StorePath (StorePath, unsafeStorePathFile))
 import qualified Nix.Diff.Store       as Store
 
+#if MIN_VERSION_base(4,19,0)
+import Data.Functor (unzip)
+#else
+unzip :: Functor f => f (a, b) -> (f a, f b)
+unzip xs = (fst <$> xs, snd <$> xs)
+#endif
+
 newtype Status = Status { visited :: Set Diffed }
 
 data Diffed = Diffed
     { leftDerivation  :: StorePath
-    , leftOutput      :: Set Text
+    , leftOutput      :: OutputNames
     , rightDerivation :: StorePath
-    , rightOutput     :: Set Text
+    , rightOutput     :: OutputNames
     } deriving (Eq, Ord)
 
 newtype Diff a = Diff { unDiff :: ReaderT DiffContext (StateT Status IO) a }
@@ -145,7 +153,7 @@ readDerivation sp = do
     path <- liftIO (Store.toPhysicalPath sp)
     let string = path
     text <- liftIO (readFileUtf8Lenient string)
-    let parser = Nix.Derivation.parseDerivationWith (storepathParser) Nix.Derivation.textParser
+    let parser = Nix.Derivation.parseDerivationWith storepathParser Nix.Derivation.textParser
     case Data.Attoparsec.Text.parse parser text of
         Done _ derivation -> do
             return derivation
@@ -212,11 +220,11 @@ getGroupedDiff oldList newList = go $ Patience.diff oldList newList
 diffOutput
     :: Text
     -- ^ Output name
-    -> (DerivationOutput StorePath Text)
+    -> DerivationOutput StorePath Text
     -- ^ Left derivation outputs
-    -> (DerivationOutput StorePath Text)
+    -> DerivationOutput StorePath Text
     -- ^ Right derivation outputs
-    -> (Maybe OutputDiff)
+    -> Maybe OutputDiff
 diffOutput outputName leftOutput rightOutput = do
     -- We deliberately do not include output paths or hashes in the diff since
     -- we already expect them to differ if the inputs differ.  Instead, we focus
@@ -328,16 +336,16 @@ diffText left right = do
 
 -- | Diff two environments
 diffEnv
-    :: Set Text
+    :: OutputNames
     -- ^ Left derivation outputs
-    -> Set Text
+    -> OutputNames
     -- ^ Right derivation outputs
     -> Map Text Text
     -- ^ Left environment to compare
     -> Map Text Text
     -- ^ Right environment to compare
     -> Diff EnvironmentDiff
-diffEnv leftOutputs rightOutputs leftEnv rightEnv = do
+diffEnv (OutputNames leftOutputs) (OutputNames rightOutputs) leftEnv rightEnv = do
     let leftExtraEnv  = Data.Map.difference leftEnv  rightEnv
     let rightExtraEnv = Data.Map.difference rightEnv leftEnv
 
@@ -384,7 +392,7 @@ diffSrcs leftSrcs rightSrcs = do
     let leftExtraNames  = Data.Set.difference leftNames  rightNames
     let rightExtraNames = Data.Set.difference rightNames leftNames
 
-    let extraSrcNames = if (leftNames /= rightNames)
+    let extraSrcNames = if leftNames /= rightNames
         then Just (Changed leftExtraNames rightExtraNames)
         else Nothing
 
@@ -433,7 +441,20 @@ diffArgs leftArgs rightArgs = fmap ArgumentsDiff do
         let rightList = Data.Vector.toList rightArgs
         Data.List.NonEmpty.nonEmpty (Patience.diff leftList rightList)
 
-diff :: Bool -> StorePath -> Set Text -> StorePath -> Set Text -> Diff DerivationDiff
+diff :: Bool
+     -- ^ Is this the top-level call for a comparison?
+     --
+     -- If so, the diff will be more detailed.
+     -> StorePath
+     -- ^ Store path of left derivation.
+     -> OutputNames
+     -- ^ Output names of left derivation.
+     -> StorePath
+     -- ^ Store path of right derivation.
+     -> OutputNames
+     -- ^ Output names of right derivation.
+     -> Diff DerivationDiff
+     -- ^ Description of how the two derivations differ.
 diff topLevel leftPath leftOutputs rightPath rightOutputs = do
     Status { visited } <- get
     let diffed = Diffed leftPath leftOutputs rightPath rightOutputs
@@ -479,15 +500,15 @@ diff topLevel leftPath leftOutputs rightPath rightOutputs = do
             let rightSrcs = Nix.Derivation.inputSrcs rightDerivation
             sourcesDiff <- diffSrcs leftSrcs rightSrcs
 
-            let leftInputs  = groupByName (Nix.Derivation.inputDrvs leftDerivation)
-            let rightInputs = groupByName (Nix.Derivation.inputDrvs rightDerivation)
+            let leftInputs  = groupByName (Data.Map.map OutputNames (Nix.Derivation.inputDrvs leftDerivation))
+            let rightInputs = groupByName (Data.Map.map OutputNames (Nix.Derivation.inputDrvs rightDerivation))
 
             let leftNames  = Data.Map.keysSet leftInputs
             let rightNames = Data.Map.keysSet rightInputs
             let leftExtraNames  = Data.Set.difference leftNames  rightNames
             let rightExtraNames = Data.Set.difference rightNames leftNames
 
-            let inputExtraNames = if (leftNames /= rightNames)
+            let inputExtraNames = if leftNames /= rightNames
                 then Just (Changed leftExtraNames rightExtraNames)
                 else Nothing
 
@@ -518,7 +539,7 @@ diff topLevel leftPath leftOutputs rightPath rightOutputs = do
                 else do
                   let leftEnv  = Nix.Derivation.env leftDerivation
                   let rightEnv = Nix.Derivation.env rightDerivation
-                  let leftOutNames  = Data.Map.keysSet leftOuts
-                  let rightOutNames = Data.Map.keysSet rightOuts
+                  let leftOutNames  = OutputNames (Data.Map.keysSet leftOuts)
+                  let rightOutNames = OutputNames (Data.Map.keysSet rightOuts)
                   Just <$> diffEnv leftOutNames rightOutNames leftEnv rightEnv
             pure DerivationDiff{..}
