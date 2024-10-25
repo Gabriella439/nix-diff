@@ -153,6 +153,7 @@ transformDiff :: TransformOptions -> DerivationDiff -> DerivationDiff
 transformDiff TransformOptions{..}
   = transformIf foldAlreadyCompared foldAlreadyComparedSubTrees
   . transformIf squashTextDiff      squashSourcesAndEnvsDiff
+  . foldManyInputDerivationsAlreadyCompared
 
 renderDiff :: RenderRunner -> RenderContext -> DerivationDiff -> IO ()
 renderDiff HumanReadable context derivation
