@@ -1,12 +1,4 @@
-{-# LANGUAGE ApplicativeDo              #-}
-{-# LANGUAGE BlockArguments             #-}
-{-# LANGUAGE CPP                        #-}
-{-# LANGUAGE DuplicateRecordFields      #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE LambdaCase                 #-}
-{-# LANGUAGE NamedFieldPuns             #-}
-{-# LANGUAGE OverloadedStrings          #-}
-{-# LANGUAGE RecordWildCards            #-}
+{-# LANGUAGE CPP #-}
 
 module Nix.Diff.Render.HumanReadable where
 
@@ -39,7 +31,7 @@ data RenderContext = RenderContext
   }
 
 newtype Render a = Render { unRender :: ReaderT RenderContext (Writer Text) a}
-    deriving
+    deriving newtype
     ( Functor
     , Applicative
     , Monad

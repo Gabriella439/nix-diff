@@ -1,11 +1,4 @@
-{-# LANGUAGE ApplicativeDo              #-}
-{-# LANGUAGE BlockArguments             #-}
-{-# LANGUAGE CPP                        #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE LambdaCase                 #-}
-{-# LANGUAGE NamedFieldPuns             #-}
-{-# LANGUAGE OverloadedStrings          #-}
-{-# LANGUAGE RecordWildCards            #-}
+{-# LANGUAGE CPP #-}
 
 module Nix.Diff where
 
@@ -23,7 +16,6 @@ import Data.Vector (Vector)
 import Nix.Derivation (Derivation, DerivationOutput)
 import Prelude hiding (unzip)
 
-import qualified Control.Monad.Reader
 import qualified Data.Attoparsec.Text
 import qualified Data.ByteString
 import qualified Data.Char            as Char
@@ -66,7 +58,7 @@ data Diffed = Diffed
     } deriving (Eq, Ord)
 
 newtype Diff a = Diff { unDiff :: ReaderT DiffContext (StateT Status IO) a }
-    deriving
+    deriving newtype
     ( Functor
     , Applicative
     , Monad

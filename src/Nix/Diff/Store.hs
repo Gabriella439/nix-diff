@@ -1,9 +1,3 @@
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE GeneralisedNewtypeDeriving #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE NoImportQualifiedPost #-}
-
 -- | A crude implementation of the Nix store concept.
 --
 -- For anything fancier than this, it would be best to use FFI bindings instead,
