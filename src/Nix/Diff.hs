@@ -90,7 +90,7 @@ data Orientation = Character | Word | Line
     underneath `/nix/store`, but this is the overwhelmingly common use case
 -}
 derivationName :: StorePath -> Text
-derivationName = Text.dropEnd 4 . Text.drop 44 . Text.pack . unsafeStorePathFile
+derivationName storePath = Text.dropEnd 4 (Text.drop 44 (Text.pack storePath.unsafeStorePathFile))
 
 -- | Group paths by their name
 groupByName :: Map StorePath a -> Map Text (Map StorePath a)
@@ -109,7 +109,7 @@ groupByName m = Data.Map.fromList assocs
     > /nix/store/${32_CHARACTER_HASH}-${NAME}.drv
 -}
 buildProductName :: StorePath -> Text
-buildProductName = Text.drop 44 . Text.pack . unsafeStorePathFile
+buildProductName storePath = Text.drop 44 (Text.pack storePath.unsafeStorePathFile)
 
 -- | Like `groupByName`, but for `Set`s
 groupSetsByName :: Set StorePath -> Map Text (Set StorePath)
@@ -157,7 +157,7 @@ readDerivation sp = do
 -- queried.
 readInput :: StorePath -> Diff (Derivation StorePath Text)
 readInput pathAndMaybeOutput = do
-    let (path, _) = List.break (== '!') (Store.unsafeStorePathFile pathAndMaybeOutput)
+    let (path, _) = List.break (== '!') pathAndMaybeOutput.unsafeStorePathFile
     if FilePath.isExtensionOf ".drv" path
     then readDerivation (StorePath path)
     else do

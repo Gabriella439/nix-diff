@@ -40,7 +40,7 @@ newtype Render a = Render { unRender :: ReaderT RenderContext (Writer Text) a}
     )
 
 runRender :: Render a -> RenderContext ->  (a, Text)
-runRender render rc = runWriter $  runReaderT (unRender render) rc
+runRender render rc = runWriter $  runReaderT render.unRender rc
 
 runRender' :: Render () -> RenderContext -> Text
 runRender' render = snd . runRender render
@@ -56,7 +56,7 @@ echo text = do
 indented :: Natural -> Render a -> Render a
 indented n = local adapt
   where
-    adapt context = context { indent = indent context + n }
+    adapt context = context { indent = context.indent + n }
 
 data TTY = IsTTY | NotTTY
 

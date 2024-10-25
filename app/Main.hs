@@ -180,7 +180,7 @@ main = do
     let renderContext = RenderContext {..}
     let status = Status Data.Set.empty
     let action = diff True (StorePath left) (OutputNames (Data.Set.singleton "out")) (StorePath right) (OutputNames (Data.Set.singleton "out"))
-    diffTree <- Control.Monad.State.evalStateT (Control.Monad.Reader.runReaderT (unDiff action) diffContext) status
+    diffTree <- Control.Monad.State.evalStateT (Control.Monad.Reader.runReaderT action.unDiff diffContext) status
     let diffTree' =
           transformDiff transformOptions diffTree
     renderDiff renderRunner renderContext diffTree'

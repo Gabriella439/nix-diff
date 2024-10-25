@@ -107,7 +107,7 @@ foldManyInputDerivationsAlreadyCompared dd = case dd of
        { inputsDiff =
            inputsDiff'
              { inputDerivationDiffs =
-                 helper [] (inputDerivationDiffs inputsDiff')
+                 helper [] inputsDiff'.inputDerivationDiffs
              }
        , ..
        }
