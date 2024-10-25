@@ -1,4 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
 module Golden.Tests where
 
 import qualified Data.Aeson

@@ -1,9 +1,4 @@
-{-# LANGUAGE ApplicativeDo              #-}
-{-# LANGUAGE BlockArguments             #-}
-{-# LANGUAGE CPP                        #-}
-{-# LANGUAGE DuplicateRecordFields      #-}
-{-# LANGUAGE OverloadedStrings          #-}
-{-# LANGUAGE RecordWildCards            #-}
+{-# LANGUAGE CPP #-}
 
 module Main where
 

@@ -1,3 +1,4 @@
+cabal-version:       3.0
 name:                nix-diff
 version:             1.0.20
 synopsis:            Explain why two Nix derivations differ
@@ -5,25 +6,46 @@ description:         This package provides a @nix-diff@ executable which
                      explains why two Nix derivations (i.e. @*.drv@ files)
                      differ
 homepage:            https://github.com/Gabriella439/nix-diff
-license:             BSD3
+license:             BSD-3-Clause
 license-file:        LICENSE
 author:              Gabriella Gonzalez
 maintainer:          GenuineGabriella@gmail.com
-copyright:           2017 Gabriella Gonzalez
+copyright:           2024 Gabriella Gonzalez
 category:            System
 build-type:          Simple
-tested-with:         GHC == 8.10.7, GHC == 9.0.2, GHC == 9.2.5, GHC == 9.4.4
-cabal-version:       >= 1.10
+tested-with:         GHC == 9.2.8,
+                     GHC == 9.4.7,
+                     GHC == 9.6.3
 extra-source-files:  README.md
                      CHANGELOG.md
 
+common language
+  default-language:    GHC2021
+  default-extensions:
+    ApplicativeDo,
+    BlockArguments,
+    DeriveAnyClass,
+    DerivingStrategies,
+    DerivingVia,
+    DuplicateRecordFields,
+    LambdaCase,
+    MultiWayIf,
+    NamedFieldPuns,
+    OverloadedStrings,
+    RecordWildCards,
+  ghc-options:         -Wall
+
 library
+  import: language
+  hs-source-dirs:      src
+
   exposed-modules:
     Nix.Diff
     Nix.Diff.Store
     Nix.Diff.Types
     Nix.Diff.Transformations
     Nix.Diff.Render.HumanReadable
+
   build-depends:       base                 >= 4.9      && < 5
                      , attoparsec           >= 0.13     && < 0.15
                      , aeson
@@ -42,11 +64,10 @@ library
                      , quickcheck-instances                < 3.29
                      , generic-arbitrary                   < 1.1
                      , uniplate                            < 1.17
-  hs-source-dirs:      src
-  default-language:    Haskell2010
-  ghc-options:         -Wall
 
 executable nix-diff
+  import: language
+  hs-source-dirs:      app
   main-is:             Main.hs
 
   build-depends:       base
@@ -58,11 +79,12 @@ executable nix-diff
                      , unix                                < 2.9
                      , containers
                      , mtl
-  hs-source-dirs:      app
-  default-language:    Haskell2010
-  ghc-options:         -Wall
 
 test-suite nix-diff-test
+  import: language
+  ghc-options:         -Wall
+
+  hs-source-dirs:      test
   main-is:             Main.hs
 
   other-modules:
@@ -83,8 +105,3 @@ test-suite nix-diff-test
                      , tasty             < 1.6
                      , tasty-quickcheck  < 0.11
                      , tasty-silver      < 3.4
-
-  hs-source-dirs:      test
-
-  default-language:    Haskell2010
-  ghc-options:         -Wall
