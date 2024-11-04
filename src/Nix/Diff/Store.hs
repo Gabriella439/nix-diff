@@ -50,7 +50,7 @@ readFileUtf8Lenient sp = do
 toPhysicalPath :: StorePath -> IO FilePath
 toPhysicalPath (StorePath p) = do
   nixStoreDir <- lookupEnv "NIX_STORE_DIR" <&> maybe "/nix/store" stripSlash
-  nixRemoteMaybe <- lookupEnv "NIX_REMOTE" <&> fmap stripSlash
+  nixRemoteMaybe <- lookupEnv "NIX_REMOTE" <&> fmap stripQuery <&> fmap stripSlash
   case nixRemoteMaybe of
     Just nixRemote | nixStoreDir `L.isPrefixOf` p -> do
       pure $ nixRemote <> "/" <> L.dropWhile (== '/') p
@@ -59,6 +59,13 @@ toPhysicalPath (StorePath p) = do
 -- | Convert a 'StorePath' to a 'Text' for display purposes. The path may not exist at this physical location.
 toText :: StorePath -> Text
 toText (StorePath p) = T.pack p
+
+-- | `NIX_REMOTE` has a URL-like format, so we need to strip the query part.
+-- Exact details to be specified; see https://github.com/NixOS/nix/issues/10582
+stripQuery :: FilePath -> FilePath
+stripQuery p = case L.elemIndex '?' p of
+  Just i -> take i p
+  Nothing -> p
 
 stripSlash :: FilePath -> FilePath
 stripSlash s | not ("/" `L.isSuffixOf` s) = s
