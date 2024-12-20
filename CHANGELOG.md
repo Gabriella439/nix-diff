@@ -1,7 +1,9 @@
-Unreleased
+1.0.21
 
 * [Support relocated Nix store](https://github.com/Gabriella439/nix-diff/pull/82)
   * If configured through `NIX_REMOTE` environment variable.
+* [Compact input derivation diffs](https://github.com/Gabriella439/nix-diff/pull/86)
+* [Fix support for `less -R` when coloring multiple lines](https://github.com/Gabriella439/nix-diff/pull/96)
 
 1.0.20
 
