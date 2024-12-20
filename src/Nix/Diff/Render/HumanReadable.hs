@@ -60,43 +60,59 @@ indented n = local adapt
 
 data TTY = IsTTY | NotTTY
 
+-- | This exists to improve compatibility with @less -R@.  See:
+--
+-- https://github.com/Gabriella439/nix-diff/issues/95
+escape
+    :: Text
+    -- ^ Beginning of escape sequence
+    -> Text
+    -- ^ Text to escape
+    -> Text
+escape begin text =
+    begin <> Text.intercalate middle (Text.splitOn "\n" text) <> end
+  where
+    end = "\ESC[0m"
+
+    middle = end <> "\n" <> begin
+
 -- | Color text red
 red :: TTY -> Text -> Text
-red  IsTTY text = "\ESC[1;31m" <> text <> "\ESC[0m"
+red  IsTTY text = escape "\ESC[1;31m" text
 red NotTTY text = text
 
 -- | Color text background red
 redBackground  :: Orientation -> TTY -> Text -> Text
-redBackground Line IsTTY text = "\ESC[41m" <> prefix <> "\ESC[0m" <> suffix
+redBackground Line IsTTY text = escape "\ESC[41m" prefix <> suffix
   where
     (prefix, suffix) = Text.break lineBoundary text
-redBackground Word IsTTY text = "\ESC[41m" <> prefix <> "\ESC[0m" <> suffix
+redBackground Word IsTTY text = escape "\ESC[41m" prefix <> suffix
   where
     (prefix, suffix) = Text.break wordBoundary text
-redBackground Character IsTTY text = "\ESC[41m" <> text <> "\ESC[0m"
+redBackground Character IsTTY text = escape "\ESC[41m" text
 redBackground Line NotTTY text = "- " <> text
 redBackground _    NotTTY text = "←" <> text <> "←"
 
 -- | Color text green
 green :: TTY -> Text -> Text
-green IsTTY  text = "\ESC[1;32m" <> text <> "\ESC[0m"
+green IsTTY  text = escape "\ESC[1;32m" text
 green NotTTY text = text
 
 -- | Color text background green
 greenBackground :: Orientation -> TTY -> Text -> Text
-greenBackground Line IsTTY text = "\ESC[42m" <> prefix <> "\ESC[0m" <> suffix
+greenBackground Line IsTTY text = escape "\ESC[42m" prefix <> suffix
   where
     (prefix, suffix) = Text.break lineBoundary text
-greenBackground Word IsTTY text = "\ESC[42m" <> prefix <> "\ESC[0m" <> suffix
+greenBackground Word IsTTY text = escape "\ESC[42m" prefix <> suffix
   where
     (prefix, suffix) = Text.break wordBoundary text
-greenBackground Character IsTTY  text = "\ESC[42m" <> text <> "\ESC[0m"
+greenBackground Character IsTTY  text = escape "\ESC[42m" text
 greenBackground Line NotTTY text = "+ " <> text
 greenBackground _    NotTTY text = "→" <> text <> "→"
 
 -- | Color text grey
 grey :: Orientation -> TTY -> Text -> Text
-grey _    IsTTY  text = "\ESC[1;2m" <> text <> "\ESC[0m"
+grey _    IsTTY  text = escape "\ESC[1;2m" text
 grey Line NotTTY text = "  " <> text
 grey _    NotTTY text = text
 
