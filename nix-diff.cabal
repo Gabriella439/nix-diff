@@ -1,6 +1,6 @@
 cabal-version:       3.0
 name:                nix-diff
-version:             1.0.20
+version:             1.0.21
 synopsis:            Explain why two Nix derivations differ
 description:         This package provides a @nix-diff@ executable which
                      explains why two Nix derivations (i.e. @*.drv@ files)
