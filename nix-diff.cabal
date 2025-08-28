@@ -62,7 +62,7 @@ library
                      , vector               >= 0.12     && < 0.14
                      , process                             < 1.7
                      , filepath                            < 1.5
-                     , QuickCheck                          < 2.15
+                     , QuickCheck                          < 2.16
                      , quickcheck-instances                < 3.29
                      , generic-arbitrary                   < 1.1
                      , uniplate                            < 1.17
