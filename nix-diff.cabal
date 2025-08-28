@@ -61,7 +61,7 @@ library
                      , text                 >= 1.2      && < 2.2
                      , vector               >= 0.12     && < 0.14
                      , process                             < 1.7
-                     , filepath                            < 1.5
+                     , filepath                            < 1.6
                      , QuickCheck                          < 2.16
                      , quickcheck-instances                < 3.29
                      , generic-arbitrary                   < 1.1
