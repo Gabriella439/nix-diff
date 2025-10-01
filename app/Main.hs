@@ -21,13 +21,15 @@ import qualified System.Posix.Terminal
 import Nix.Diff
 import Nix.Diff.Store (StorePath(StorePath))
 import Nix.Diff.Types
+import Nix.Diff.Render.Common
+import Nix.Diff.Render.HTML
 import Nix.Diff.Render.HumanReadable
 import Nix.Diff.Transformations
 import Data.Foldable (Foldable(fold))
 
 data Color = Always | Auto | Never
 
-data RenderRunner = HumanReadable | JSON
+data RenderRunner = HumanReadable | HTML | JSON
 
 data TransformOptions = TransformOptions
   { foldAlreadyCompared :: Bool
@@ -81,12 +83,28 @@ parseEnvironment =
         )
 
 parseRenderRunner :: Parser RenderRunner
-parseRenderRunner = json <|> pure HumanReadable
+parseRenderRunner = html <|> human <|> json <|> pure HumanReadable
   where
+    html = Options.Applicative.flag' HTML
+      (  Options.Applicative.long "html"
+      <> Options.Applicative.help "Print output in HTML format"
+      )
+    human = Options.Applicative.flag' HumanReadable
+      (  Options.Applicative.long "human"
+      <> Options.Applicative.help "Print output in a human-readable format (default)"
+      )
     json = Options.Applicative.flag' JSON
       (  Options.Applicative.long "json"
       <> Options.Applicative.help "Print output in JSON format"
       )
+
+parseTitle :: Parser Text
+parseTitle =
+    Options.Applicative.option
+        Options.Applicative.str
+        (   Options.Applicative.long "title"
+        <>  Options.Applicative.help "Set title of document (only used in HTML)"
+        )
 
 parseTransformOptions :: Parser TransformOptions
 parseTransformOptions = do
@@ -116,6 +134,7 @@ data Options = Options
     , orientation      :: Orientation
     , environment      :: Bool
     , renderRunner     :: RenderRunner
+    , title            :: Text
     , transformOptions :: TransformOptions
     , context          :: Maybe Natural
     }
@@ -128,6 +147,7 @@ parseOptions = do
     orientation      <- parseLineOriented
     environment      <- parseEnvironment
     renderRunner     <- parseRenderRunner
+    title            <- parseTitle
     transformOptions <- parseTransformOptions
     context          <- optional parseContext
 
@@ -158,6 +178,8 @@ transformDiff TransformOptions{..}
 renderDiff :: RenderRunner -> RenderContext -> DerivationDiff -> IO ()
 renderDiff HumanReadable context derivation
   = Text.IO.putStr $ runRender' (renderDiffHumanReadable derivation) context
+renderDiff HTML context derivation
+  = Text.IO.putStr $ runRender' (renderDiffHTML derivation) context
 renderDiff JSON _ derivation = Data.ByteString.Lazy.Char8.putStrLn (Data.Aeson.encode derivation)
 
 main :: IO ()

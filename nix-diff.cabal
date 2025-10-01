@@ -46,6 +46,8 @@ library
     Nix.Diff.Store
     Nix.Diff.Types
     Nix.Diff.Transformations
+    Nix.Diff.Render.Common
+    Nix.Diff.Render.HTML
     Nix.Diff.Render.HumanReadable
 
   build-depends:       base                 >= 4.9      && < 5
