@@ -4,7 +4,7 @@ jobs:
     name: "GHC ${{ matrix.ghc }}, Cabal ${{ matrix.cabal }}, OS ${{ matrix.os }}"
     "runs-on": "${{ matrix.os }}"
     steps:
-    - uses: "cachix/install-nix-action@v23"
+    - uses: "cachix/install-nix-action@v31"
       with:
         nix_path: "nixpkgs=channel:nixos-unstable"
     - uses: "actions/checkout@v4"
@@ -24,7 +24,7 @@ jobs:
         fi
     - name: freeze
       run: "cabal freeze --enable-tests --enable-benchmarks"
-    - uses: "actions/cache@v3"
+    - uses: "actions/cache@v4"
       with:
         key: "${{ matrix.os }}-${{ matrix.ghc }}-${{ matrix.cabal}}-${{ hashFiles('cabal.project.freeze') }}"
         path: |
@@ -43,16 +43,14 @@ jobs:
     strategy:
       matrix:
         cabal:
-        - '3.10'
+        - '3.16'
         ghc:
-        - '9.6.3'
-        - '9.4.7'
-        - '9.2.8'
+        - '9.8.4'
+        - '9.6.7'
+        - '9.4.8'
         os:
         - "ubuntu-latest"
 name: Haskell CI
 'on':
   pull_request: {}
   push: {}
-  schedule:
-  - cron: "4 20 10 * *"
