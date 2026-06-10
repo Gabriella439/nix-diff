@@ -56,13 +56,13 @@ library
                      , directory                           < 1.4
                      , mtl                  >= 2.2      && < 2.4
                      , nix-derivation       >= 1.1      && < 1.2
-                     , optparse-applicative >= 0.14.0.0 && < 0.19
+                     , optparse-applicative >= 0.14.0.0 && < 0.20
                      , patience             >= 0.3      && < 0.4
                      , text                 >= 1.2      && < 2.2
                      , vector               >= 0.12     && < 0.14
                      , process                             < 1.7
                      , filepath                            < 1.6
-                     , QuickCheck                          < 2.16
+                     , QuickCheck                          < 2.19
                      , quickcheck-instances                < 3.29
                      , generic-arbitrary                   < 1.1
                      , uniplate                            < 1.17
