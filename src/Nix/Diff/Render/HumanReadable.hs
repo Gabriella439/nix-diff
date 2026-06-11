@@ -3,15 +3,12 @@
 module Nix.Diff.Render.HumanReadable where
 
 import Control.Monad (forM_)
-import Control.Monad.Reader (MonadReader, ReaderT (runReaderT), ask, local)
-import Control.Monad.Writer(MonadWriter, Writer, tell, runWriter)
+import Control.Monad.Reader (ask)
 import Data.Text (Text)
-import Numeric.Natural (Natural)
 
-import qualified Control.Monad.Reader
 import qualified Data.Map
 import qualified Data.Set
-import qualified Data.Text            as Text
+import qualified Data.Text as Text
 import qualified Patience
 
 #if !MIN_VERSION_base(4,15,1)
@@ -20,45 +17,9 @@ import Control.Monad.Fail (MonadFail)
 
 import Nix.Diff
 import Nix.Diff.Types
+import Nix.Diff.Render.Common
 import qualified Nix.Diff.Store as Store
 
-
-data RenderContext = RenderContext
-  { orientation :: Orientation
-  , tty         :: TTY
-  , indent      :: Natural
-  , context     :: Maybe Natural
-  }
-
-newtype Render a = Render { unRender :: ReaderT RenderContext (Writer Text) a}
-    deriving newtype
-    ( Functor
-    , Applicative
-    , Monad
-    , MonadReader RenderContext
-    , MonadWriter Text
-    )
-
-runRender :: Render a -> RenderContext ->  (a, Text)
-runRender render rc = runWriter $  runReaderT render.unRender rc
-
-runRender' :: Render () -> RenderContext -> Text
-runRender' render = snd . runRender render
-
-echo :: Text -> Render ()
-echo text = do
-    RenderContext { indent } <- ask
-    let n = fromIntegral indent
-    tellLn (Text.replicate n " " <> text)
-  where
-    tellLn line = tell (line <> "\n")
-
-indented :: Natural -> Render a -> Render a
-indented n = local adapt
-  where
-    adapt context = context { indent = context.indent + n }
-
-data TTY = IsTTY | NotTTY
 
 -- | This exists to improve compatibility with @less -R@.  See:
 --
@@ -136,11 +97,6 @@ renderWith Changed{..} k = do
     RenderContext { tty } <- ask
     k (minus tty, before)
     k (plus  tty, now)
-
--- | Format the derivation outputs
-renderOutputs :: OutputNames -> Text
-renderOutputs (OutputNames outputs) =
-    ":{" <> Text.intercalate "," (Data.Set.toList outputs) <> "}"
 
 renderDiffHumanReadable :: DerivationDiff -> Render ()
 renderDiffHumanReadable = \case
@@ -303,11 +259,3 @@ renderDiffHumanReadable = \case
 
                   middle (_, line, _) = line
       return (format (Text.concat (fmap renderChunk windowedChunks)))
-
-    ifExist m l = maybe (pure ()) l m
-
-zippers :: [a] -> [([a], a, [a])]
-zippers = go []
-  where
-    go _           []  = []
-    go prefix (x : xs) = (prefix, x, xs) : go (x : prefix) xs

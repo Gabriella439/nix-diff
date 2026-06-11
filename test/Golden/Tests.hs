@@ -8,6 +8,7 @@ import Test.Tasty.Silver (goldenVsAction)
 
 import Nix.Diff
 import Nix.Diff.Transformations
+import Nix.Diff.Render.Common
 import Nix.Diff.Render.HumanReadable
 
 import Golden.Utils ( TestableDerivations, makeDiffTree )
@@ -26,7 +27,7 @@ goldenTests simpleTd complexTd = testGroup "Golden tests"
       skipAlreadyComparedExpected
       complex_words
       (humanReadable_words . foldAlreadyComparedSubTrees)
-      
+
   , goldenVsAction "JSON, squash text and envs"
       jsonSquashedExpected
       simple_words
@@ -48,7 +49,7 @@ goldenTests simpleTd complexTd = testGroup "Golden tests"
     indent' = 0
     diffContextEnv orient = DiffContext orient True
     diffContext orient = DiffContext orient False
-    renderContext orient = RenderContext orient NotTTY indent'
+    renderContext orient = RenderContext orient NotTTY indent' ""
 
 humanReadableExpected :: FilePath
 humanReadableExpected = "./golden-tests/expected-outputs/human-readable"
