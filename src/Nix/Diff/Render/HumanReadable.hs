@@ -9,9 +9,10 @@ import Data.Text (Text)
 import Numeric.Natural (Natural)
 
 import qualified Control.Monad.Reader
+import qualified Data.Char as Char
 import qualified Data.Map
 import qualified Data.Set
-import qualified Data.Text            as Text
+import qualified Data.Text as Text
 import qualified Patience
 
 #if !MIN_VERSION_base(4,15,1)
@@ -93,6 +94,17 @@ redBackground Character IsTTY text = escape "\ESC[41m" text
 redBackground Line NotTTY text = "- " <> text
 redBackground _    NotTTY text = "←" <> text <> "←"
 
+-- | Color text red, coloring the background instead if it's whitespace
+redSmart :: Orientation -> TTY -> Text -> Text
+redSmart orientation tty text = Text.concat do
+    chunk <- Text.groupBy (\a b -> Char.isSpace a == Char.isSpace b) text
+
+    case Text.uncons chunk of
+        Nothing -> return ""
+        Just (c, _)
+            | Char.isSpace c -> return (redBackground orientation tty chunk)
+            | otherwise -> return (red tty chunk)
+
 -- | Color text green
 green :: TTY -> Text -> Text
 green IsTTY  text = escape "\ESC[1;32m" text
@@ -109,6 +121,17 @@ greenBackground Word IsTTY text = escape "\ESC[42m" prefix <> suffix
 greenBackground Character IsTTY  text = escape "\ESC[42m" text
 greenBackground Line NotTTY text = "+ " <> text
 greenBackground _    NotTTY text = "→" <> text <> "→"
+
+-- | Color text green, coloring the background instead if it's whitespace
+greenSmart :: Orientation -> TTY -> Text -> Text
+greenSmart orientation tty text = Text.concat do
+    chunk <- Text.groupBy (\a b -> Char.isSpace a == Char.isSpace b) text
+
+    case Text.uncons chunk of
+        Nothing -> return ""
+        Just (c, _)
+            | Char.isSpace c -> return (greenBackground orientation tty chunk)
+            | otherwise -> return (green tty chunk)
 
 -- | Color text grey
 grey :: Orientation -> TTY -> Text -> Text
@@ -283,9 +306,9 @@ renderDiffHumanReadable = \case
                   indentLine line = prefix <> "    " <> line
 
       let renderChunk (Patience.Old  l  ) =
-              redBackground   orientation tty l
+              redSmart   orientation tty l
           renderChunk (Patience.New    r) =
-              greenBackground orientation tty r
+              greenSmart orientation tty r
           renderChunk (Patience.Both l _) =
               grey            orientation tty l
 
